@@ -1,0 +1,251 @@
+"""Reading the bot account's DM thread with the owner over plain HTTP, and the handled-message state.
+
+Reads use the cookies file that the browser profile writes (see browser.py). Sending never happens here:
+a scripted POST to Instagram's web API got a session logged out in testing, so replies are typed into
+the real page instead.
+"""
+import http.cookiejar
+import json
+import os
+import re
+import time
+from contextlib import contextmanager
+
+import requests
+
+APP_ID = "936619743392459"  # Instagram web app id, sent by instagram.com itself
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+
+
+class LoggedOut(Exception):
+    pass
+
+
+# ---------- reading ----------
+
+def owner_thread(cfg, messages=50):
+    """The one-to-one thread with the owner (None if there is none yet). Raises LoggedOut if the cookies are refused."""
+    jar = http.cookiejar.MozillaCookieJar(str(cfg.cookies))
+    try:
+        jar.load(ignore_discard=True, ignore_expires=True)
+    except OSError:
+        raise LoggedOut("no cookies file yet")
+    csrf = next((c.value for c in jar if c.name == "csrftoken"), "")
+    r = requests.get(
+        "https://www.instagram.com/api/v1/direct_v2/inbox/",
+        params={"persistentBadging": "true", "limit": 20, "thread_message_limit": messages},
+        cookies=jar, allow_redirects=False, timeout=30,
+        headers={"User-Agent": UA, "X-IG-App-ID": APP_ID, "X-CSRFToken": csrf,
+                 "X-Requested-With": "XMLHttpRequest", "Referer": "https://www.instagram.com/direct/inbox/"})
+    if r.status_code in (301, 302, 401, 403):
+        raise LoggedOut(f"HTTP {r.status_code}")
+    r.raise_for_status()
+    for t in r.json().get("inbox", {}).get("threads", []):
+        users = t.get("users", [])
+        if len(users) == 1 and users[0].get("username", "").lower() == cfg.owner.lower():
+            t["owner_id"] = str(users[0].get("pk"))
+            return t
+    return None
+
+
+INSTAGRAM_POST = re.compile(r"https://(www\.)?instagram\.com/(p|reel|reels|tv)/[\w-]+")
+CDN = ("fbcdn.net", "cdninstagram.com")
+TEXT_KEYS = {"text", "title", "caption", "subtitle", "title_text", "subtitle_text", "header_title_text",
+             "preview_text", "description", "link_title", "link_summary"}
+POST_KEYS = ("clip", "media_share", "direct_media_share", "xma_clip", "xma_media_share", "felix_share")
+
+
+def describe(it):
+    """One message as the agent sees it: text, or a post link the pipeline can open, or a fallback."""
+    typ = it.get("item_type")
+    out = {"item_id": it["item_id"], "timestamp": int(it["timestamp"]), "type": typ}
+    if typ == "text":
+        out["text"] = it.get("text", "")
+    replied = (it.get("replied_to_message") or {})
+    if replied.get("item_id"):
+        out["replying_to"] = replied["item_id"]
+    for key in POST_KEYS:
+        v = it.get(key)
+        if not v:
+            continue
+        v = v[0] if isinstance(v, list) else v
+        media = v.get("clip") or v.get("media") or v.get("video") or v
+        code = media.get("code") if isinstance(media, dict) else None
+        if code:
+            kind = "reel" if key in ("clip", "xma_clip", "felix_share") else "p"
+            out["url"] = f"https://www.instagram.com/{kind}/{code}/"
+        elif isinstance(v, dict) and INSTAGRAM_POST.match(v.get("target_url") or ""):
+            out["url"] = v["target_url"]
+    if typ != "text" and "url" not in out:
+        out.update(fallback(it))
+    return out
+
+
+def fallback(it):
+    """For item types the pipeline cannot open (story, Threads post, link, uploaded photo):
+    whatever text, links and picture the item carries."""
+    texts, links, image = [], [], None
+
+    def walk(o, key=""):
+        nonlocal image
+        if isinstance(o, dict):
+            if image is None and isinstance(o.get("candidates"), list) and o["candidates"]:
+                image = (o["candidates"][0] or {}).get("url")
+            for k, v in o.items():
+                walk(v, k)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v, key)
+        elif isinstance(o, str) and o.strip():
+            if o.startswith("http"):
+                if any(c in o for c in CDN):
+                    if image is None and key in ("preview_url", "image_url", "link_image_url", "thumbnail_url", "url"):
+                        image = o
+                elif o not in links:
+                    links.append(o)
+            elif key in TEXT_KEYS and o not in texts:
+                texts.append(o)
+
+    walk({k: v for k, v in it.items() if k not in ("item_id", "user_id", "timestamp", "client_context")})
+    ig_post = next((u for u in links if INSTAGRAM_POST.match(u)), None)
+    if ig_post:
+        return {"url": ig_post}
+    out = {"note": f"not a post the reel pipeline can open ({it.get('item_type')})"}
+    if texts:
+        out["texts"] = texts[:8]
+    if links:
+        out["links"] = links[:5]
+    if image:
+        out["image_url"] = image
+    return out
+
+
+def sent_text(item):
+    """A message's text. Instagram stores a message it thinks holds a link ("Three.js", "2.78") as a
+    `link` item with the text under link.text, so the top-level text alone misses it."""
+    raw = item.get("text") or (item.get("link") or {}).get("text") or ""
+    return " ".join(raw.split())
+
+
+def owner_items(thread):
+    if not thread:
+        return []
+    return sorted((describe(it) for it in thread.get("items", []) if str(it.get("user_id")) == thread["owner_id"]),
+                  key=lambda x: x["timestamp"])
+
+
+# ---------- state, shared by parallel workers ----------
+# state.json: {"last_timestamp": every owner message at or before this is handled,
+#              "done": ids handled after it, "active": {turn_id: {"items": [...], "started": t}},
+#              "tries": {turn_id: n}}
+
+@contextmanager
+def file_lock(path, stale=120, wait=300):
+    """Exclusive lock through an O_EXCL file; a lock older than `stale` seconds is taken over."""
+    deadline = time.time() + wait
+    while True:
+        try:
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime > stale:
+                    path.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                continue
+            if time.time() > deadline:
+                raise TimeoutError(f"lock {path.name} busy")
+            time.sleep(0.5)
+    try:
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def read_state(cfg):
+    try:
+        s = json.loads(cfg.state_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        s = {}
+    for k, v in (("last_timestamp", None), ("done", []), ("active", {}), ("tries", {})):
+        s.setdefault(k, v)
+    return s
+
+
+@contextmanager
+def state(cfg):
+    """Read-modify-write the state under the lock."""
+    with file_lock(cfg.data_dir / "state.lock", stale=30, wait=60):
+        s = read_state(cfg)
+        yield s
+        cfg.state_file.write_text(json.dumps(s, indent=1), encoding="utf-8")
+
+
+def pending(thread, s, include_active=True):
+    """The owner's unhandled messages, oldest first (optionally leaving out those a worker has claimed).
+    Before the first run has set a starting point nothing is pending, so old history is never answered."""
+    if s["last_timestamp"] is None:
+        return []
+    claimed = set() if include_active else {i for a in s["active"].values() for i in a["items"]}
+    skip = set(s["done"]) | claimed
+    return [it for it in owner_items(thread) if it["timestamp"] > s["last_timestamp"] and it["item_id"] not in skip]
+
+
+def start_here(cfg, thread):
+    """First run: everything already in the thread counts as handled."""
+    with state(cfg) as s:
+        if s["last_timestamp"] is None:
+            items = owner_items(thread)
+            s["last_timestamp"] = items[-1]["timestamp"] if items else int(time.time() * 1e6)
+            return True
+    return False
+
+
+def mark_done(cfg, thread, item_ids):
+    known = {it["item_id"] for it in owner_items(thread)}
+    missing = [i for i in item_ids if i not in known]
+    if missing:
+        raise KeyError(", ".join(missing))
+    with state(cfg) as s:
+        done = set(s["done"]) | set(item_ids)
+        # move the watermark over every handled message at the start of the list, and forget those ids
+        for it in owner_items(thread):
+            if it["timestamp"] <= (s["last_timestamp"] or 0):
+                continue
+            if it["item_id"] not in done:
+                break
+            s["last_timestamp"] = it["timestamp"]
+            done.discard(it["item_id"])
+        s["done"] = sorted(done)
+
+
+# ---------- turns ----------
+
+AFTER = 180_000_000   # microseconds: a text sent up to 3 minutes after a post belongs to it
+BEFORE = 10_000_000   # a text sent a few seconds before a post also belongs to it (delivery order is not guaranteed)
+
+
+def group(items):
+    """Split messages into turns. A text belongs to the latest post sent up to 3 minutes before it; a text sent
+    before a post does not, except within a few seconds, because Instagram sometimes delivers the text just
+    ahead of the post sent with it. Other texts are messages of their own (consecutive ones within 3 minutes
+    are read together)."""
+    posts = [i for i in items if i["type"] != "text"]
+    turns = {p["item_id"]: [p] for p in posts}
+    loose = []
+    for t in (i for i in items if i["type"] == "text"):
+        prev = [p for p in posts if 0 <= t["timestamp"] - p["timestamp"] <= AFTER]
+        nxt = [p for p in posts if 0 < p["timestamp"] - t["timestamp"] <= BEFORE]
+        target = prev[-1] if prev else (nxt[0] if nxt else None)
+        if target:
+            turns[target["item_id"]].append(t)
+        elif loose and t["timestamp"] - loose[-1][-1]["timestamp"] <= AFTER:
+            loose[-1].append(t)
+        else:
+            loose.append([t])
+    out = [sorted(v, key=lambda x: x["timestamp"]) for v in list(turns.values()) + loose]
+    return sorted(out, key=lambda turn: turn[0]["timestamp"])

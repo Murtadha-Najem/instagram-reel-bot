@@ -1,0 +1,41 @@
+# Copy this file to config.toml and fill it in. config.toml is ignored by git.
+
+[instagram]
+# Your main account: the bot answers messages from this account only and ignores everyone else.
+owner = "your_main_account"
+# Browser for the bot account's profile: "msedge", "chrome", or "chromium" (Playwright's own, after
+# `python -m playwright install chromium`).
+browser = "chrome"
+
+[schedule]
+interval_minutes = 5   # how often to look for new messages (the check itself costs no tokens)
+max_workers = 2        # posts answered at the same time; each loads the audio model and an agent session
+
+[agent]
+# Who reads the analysed post and writes the reply:
+#   "claude"  Claude Code CLI (`claude`), logged in with a Claude subscription or an API key
+#   "codex"   OpenAI Codex CLI (`codex exec`), experimental
+#   "custom"  your own command; {prompt_file} is replaced with the path of the prompt
+kind = "claude"
+model = ""      # empty = the CLI's default
+command = ""    # only for kind = "custom", e.g. "my-agent --prompt-file {prompt_file}"
+
+[reply]
+language = "English"
+max_chars = 350
+# Extra rules for the reply, one per line. Example for Arabic, where English words inside an Arabic
+# sentence break the text direction in Instagram:
+#   rules = [
+#     "Write names and terms in Arabic letters where you sensibly can; keep English words to the unavoidable minimum.",
+#     "Avoid brackets and quotation marks; use a comma.",
+#   ]
+rules = []
+
+[gemini]
+# Transcribes speech in videos (free keys at https://aistudio.google.com/apikey). Several keys rotate when
+# one runs out of its daily free quota. Leave empty to use the GEMINI_API_KEY environment variable instead.
+api_keys = []
+
+[paths]
+# data_dir = "~/instagram-reel-bot-data"   # videos, frames, transcripts, records, logs (default: ./data)
+# user_dir = ""                            # browser profile and cookies (default: your OS's app-data folder)

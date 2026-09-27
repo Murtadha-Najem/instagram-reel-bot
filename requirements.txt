@@ -1,0 +1,14 @@
+# bot
+playwright
+requests
+# reel pipeline
+yt-dlp
+numpy
+opencv-python
+Pillow
+onnxruntime
+rapidocr
+shazamio
+torch
+panns-inference
+google-genai

@@ -1,0 +1,13 @@
+# your settings, keys and account
+config.toml
+cookies*.txt
+gemini_keys.txt
+
+# everything the bot collects: videos, frames, transcripts, records, state, logs
+data/
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.claude/
