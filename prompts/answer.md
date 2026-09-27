@@ -46,6 +46,7 @@ Paths (always call Python by this full path with absolute script paths; never `c
    ```
 6. Send the reply as an Instagram reply to his message, so he sees which message it answers:
    `{python} "{root}/botctl.py" send "<reply>" --reply-to <item_id>`, where the item is his question in your turn, or the shared post itself when he wrote nothing. It must print a line starting with `SENT`.
+   (When he asked for several messages, send them one after another as described under The reply.)
    Then mark every message of your turn as handled: `{python} "{root}/botctl.py" done <every item_id in your turn file>`.
    If send prints `INBOX ERROR` or `SEND ERROR`, stop: do not retry and do not try another way.
 7. End with one line: answered or not, and anything that failed.
@@ -57,7 +58,7 @@ Do not create scratch files in the bot folder.
 - One to three sentences on one line: no line breaks, bullets, headings or markdown. At most {max_chars} characters, even when the post lists many things: pick what matters for his question. Detail belongs in the record, not the chat.
 - Lead with what the research found, not with a retelling of the post: name the real thing (the repo, the site, the tool) and say what is true, what it really does, and the catch. If he asked something, answer exactly that. With no question, give the one thing worth knowing that the post itself does not say. An honest opinion is welcome when it adds something.
 - No song lyrics or full poems quoted; name the song and artist.
-- Exactly one reply for your turn.
+- One reply for your turn, unless he asks for several messages (for example "a short message for each repo", "send each one separately"): then send one message per item, in order, each within the same length limit, up to 6 messages. Only the first one goes with `--reply-to`; send the others without it. Mark the turn handled only after the last one printed SENT.
 {rules}
 
 ## Boundaries
