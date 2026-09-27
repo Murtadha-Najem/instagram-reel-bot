@@ -9,6 +9,7 @@ import json
 import os
 import re
 import time
+import urllib.request
 from contextlib import contextmanager
 
 import requests
@@ -24,8 +25,36 @@ class LoggedOut(Exception):
 
 # ---------- reading ----------
 
+def _via_live(cfg):
+    """In live mode, ask the open browser: the read then comes from the web app itself, with the same
+    browser, cookies and user agent as everything else, instead of from a second, different-looking client."""
+    try:
+        info = json.loads((cfg.data_dir / "live.json").read_text(encoding="utf-8"))
+        req = urllib.request.Request(f"http://127.0.0.1:{info['port']}/thread", method="POST", data=b"{}",
+                                     headers={"Content-Type": "application/json", "X-Token": info["token"]})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            res = json.loads(r.read())
+    except (OSError, ValueError, KeyError):
+        return None  # live mode is not running
+    if not res.get("ok"):
+        raise LoggedOut(res.get("status", "live browser could not read the inbox"))
+    t = json.loads(res["status"])["thread"]
+    return t or {}
+
+
+def _user_agent(cfg):
+    """The same user agent the bot's browser presents (cached by browser.py), so both look like one client."""
+    try:
+        return (cfg.user_dir / "user_agent.txt").read_text(encoding="utf-8").split("\n")[1] or UA
+    except (OSError, IndexError):
+        return UA
+
+
 def owner_thread(cfg, messages=50):
     """The one-to-one thread with the owner (None if there is none yet). Raises LoggedOut if the cookies are refused."""
+    t = _via_live(cfg)
+    if t is not None:
+        return t or None
     jar = http.cookiejar.MozillaCookieJar(str(cfg.cookies))
     try:
         jar.load(ignore_discard=True, ignore_expires=True)
@@ -36,7 +65,7 @@ def owner_thread(cfg, messages=50):
         "https://www.instagram.com/api/v1/direct_v2/inbox/",
         params={"persistentBadging": "true", "limit": 20, "thread_message_limit": messages},
         cookies=jar, allow_redirects=False, timeout=30,
-        headers={"User-Agent": UA, "X-IG-App-ID": APP_ID, "X-CSRFToken": csrf,
+        headers={"User-Agent": _user_agent(cfg), "X-IG-App-ID": APP_ID, "X-CSRFToken": csrf,
                  "X-Requested-With": "XMLHttpRequest", "Referer": "https://www.instagram.com/direct/inbox/"})
     if r.status_code in (301, 302, 401, 403):
         raise LoggedOut(f"HTTP {r.status_code}")

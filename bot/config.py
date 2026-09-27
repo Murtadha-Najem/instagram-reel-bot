@@ -29,7 +29,8 @@ class Config:
     owner: str                      # the only account whose messages are answered
     browser: str = "msedge"         # Playwright channel: msedge, chrome, or chromium
     mode: str = "interval"          # "live" (a browser stays open and reacts at once) or "interval"
-    interval_minutes: int = 5       # interval mode: how often to check; live mode: the fallback check
+    interval_minutes: int = 5       # interval mode: how often to check
+    live_fallback_minutes: int = 15  # live mode: a safety check this often, in case the page misses a message
     max_workers: int = 2
     agent: str = "claude"           # claude, codex, or custom
     agent_command: str = ""         # for custom: a command line, {prompt_file} is replaced
@@ -82,6 +83,7 @@ def load():
         browser=ig.get("browser", "msedge"),
         mode=sched.get("mode", "interval"),
         interval_minutes=int(sched.get("interval_minutes", 5)),
+        live_fallback_minutes=int(sched.get("live_fallback_minutes", 15)),
         max_workers=int(sched.get("max_workers", 2)),
         agent=agent.get("kind", "claude"),
         agent_command=agent.get("command", ""),

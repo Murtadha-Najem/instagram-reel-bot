@@ -160,6 +160,10 @@ def worker(cfg, tid):
     t0 = time.time()
     handled = False
     try:
+        try:  # "Seen" tells him straight away that the bot has his message
+            log(cfg, f"turn {tid}: {browser.mark_seen(cfg)}")
+        except Exception as e:
+            log(cfg, f"turn {tid}: could not mark seen ({type(e).__name__}), going on")
         for it in turn:
             if "url" in it:
                 analyse(cfg, it)

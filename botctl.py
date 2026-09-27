@@ -2,6 +2,7 @@
 
   python botctl.py login                 open a browser window and log in to the bot account (once)
   python botctl.py status                is the bot account logged in
+  python botctl.py open                  show the bot's browser (stop the bot first), e.g. to answer an Instagram warning
   python botctl.py start                 run the bot in this terminal, in the mode set in config.toml
   python botctl.py schedule install      start the bot automatically (Windows Task Scheduler, macOS launchd,
                                          Linux systemd), in the mode set in config.toml
@@ -14,6 +15,7 @@
   python botctl.py send "<text>" [--reply-to <item_id>]    send a reply (the agent uses this)
   python botctl.py done <item_id>...     mark messages as handled (the agent uses this)
   python botctl.py cookies               refresh the cookies file from the browser profile
+  python botctl.py seen                  open the owner's chat so he sees "Seen" (workers do this on pickup)
 """
 import json
 import sys
@@ -36,6 +38,10 @@ def main(argv):
         print(browser.status(cfg))
     elif cmd == "cookies":
         print(browser.refresh_cookies(cfg))
+    elif cmd == "open":
+        browser.open_visible(cfg)
+    elif cmd == "seen":
+        print(browser.mark_seen(cfg))
     elif cmd == "start":
         if cfg.mode == "live":
             from bot import live

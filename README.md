@@ -87,7 +87,8 @@ All settings live in `config.toml` (see `config.example.toml` for comments):
 | `instagram.owner` | the only account whose messages are answered |
 | `instagram.browser` | `chrome`, `msedge` or `chromium` |
 | `schedule.mode` | `live` (a headless browser reacts within seconds) or `interval` (a check every few minutes) |
-| `schedule.interval_minutes` | interval mode: how often to check; live mode: the fallback check (default 5) |
+| `schedule.interval_minutes` | interval mode: how often to check (default 5) |
+| `schedule.live_fallback_minutes` | live mode: a safety check this often, in case the page misses a message (default 15) |
 | `schedule.max_workers` | turns answered at once (default 2) |
 | `agent.kind` | `claude`, `codex` or `custom` |
 | `agent.model` | optional model name for the agent |
@@ -130,7 +131,8 @@ python look.py <shortcode> sheet --start S --end E --n N | frame SECONDS
 
 ## Troubleshooting
 
-- **Replies stopped.** Look at `data/logs/watch.log`. "logged out" means Instagram ended the bot's session: run `python botctl.py login` again.
+- **Replies stopped.** Look at `data/logs/watch.log`. "logged out" means Instagram ended the bot's session: run `python botctl.py login` again. "wants the account owner to answer a warning or check" means Instagram suspects automation: stop the bot (`python botctl.py schedule remove`, or end the task), run `python botctl.py open`, deal with the warning yourself in the window, close it, and start the bot again.
+- **Keep the account looking like one person.** Use its session in one place only (do not copy its cookies into other browsers or tools), and in live mode let the open browser do all the reading, which it does by default.
 - **A turn keeps failing.** Each agent run writes `data/logs/agent_*.log`. A turn is tried twice, then left alone until you send something new.
 - **Live mode seems deaf.** The fallback check still answers within `interval_minutes`. `python botctl.py status` ends in "(live)" when the live browser is running; if it does not, `python botctl.py schedule install` again (on Windows the task also restarts it every 10 minutes if it stopped).
 - **Windows and packaged terminals:** if you run the bot's commands from a terminal inside a Store (MSIX) app, Windows gives that terminal a private, redirected copy of `AppData`, which the Task Scheduler never sees. That is why the bot keeps its browser profile and cookies in `~/.instagram-reel-bot` on Windows, and why it also keeps its session in a cookies file it can load into the browser when needed.

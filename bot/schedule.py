@@ -86,7 +86,7 @@ Register-ScheduledTask -TaskName '{NAME}' -Description 'instagram-reel-bot ({cfg
         where = f"systemd user unit {NAME}"
     if live:
         print(f"{where}: live mode starts when you log in and restarts if it stops "
-              f"(fallback check every {minutes} minutes).")
+              f"(safety check every {cfg.live_fallback_minutes} minutes).")
     else:
         print(f"{where}: a check every {minutes} minutes.")
 

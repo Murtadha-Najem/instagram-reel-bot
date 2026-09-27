@@ -103,7 +103,10 @@ def _run(cfg, dry_run):
             log(cfg, f"live: watching the inbox of @{viewer.get('username')} for messages from @{cfg.owner}")
             print(f"Live: watching for messages from @{cfg.owner}. Ctrl+C to stop.", flush=True)
 
-            fallback = time.time()           # the check on a timer, in case the page misses something
+            # the check on a timer, in case the page misses something; the first one runs at once, for
+            # anything that arrived while the bot was not running
+            every = cfg.live_fallback_minutes * 60
+            fallback = time.time() - every
             cookies_at = reload_at = time.time()
             last_check, pending_ping, proc = 0.0, False, None
             while True:
@@ -119,11 +122,11 @@ def _run(cfg, dry_run):
                 if pending_ping and not running and now - last_check > 5:
                     log(cfg, "live: new activity in the chat, checking")
                     proc, last_check, pending_ping, fallback = _spawn_check(cfg, dry_run), now, False, now
-                elif now - fallback > cfg.interval_minutes * 60 and not running:
+                elif now - fallback > every and not running:
                     proc, last_check, fallback = _spawn_check(cfg, dry_run), now, now
                 while not jobs.empty():
                     kind, body, slot = jobs.get()
-                    slot["result"] = _job(cfg, ctx, kind, body)
+                    slot["result"] = _job(cfg, ctx, page, kind, body)
                     slot["done"].set()
                 if now - cookies_at > 600:   # keep the plain-HTTP cookies fresh
                     browser.write_cookies(cfg, ctx)
@@ -134,20 +137,33 @@ def _run(cfg, dry_run):
                 if "/accounts/login" in page.url:
                     log(cfg, "live: Instagram logged the bot out; run `python botctl.py login`")
                     raise browser.InboxError("logged out")
+                if any(k in page.url for k in browser.CHECKPOINT_PATHS):
+                    log(cfg, "live: Instagram wants the account owner to answer a warning or check; "
+                             "stop the bot and run `python botctl.py open`")
+                    raise browser.InboxError("checkpoint")
         finally:
             info.unlink(missing_ok=True)
             server.shutdown()
             ctx.close()
 
 
-def _job(cfg, ctx, kind, body):
-    """Work handed over by other processes, done in this browser on a second tab."""
+def _job(cfg, ctx, page, kind, body):
+    """Work handed over by other processes, done in this browser. Reads use the open page itself, so a check
+    in live mode is just the web app asking its own API; anything that navigates gets a second tab."""
+    if kind == "thread":
+        try:
+            t, viewer = browser.page_thread(cfg, page)
+            return {"ok": True, "status": json.dumps({"thread": t, "viewer": viewer})}
+        except browser.InboxError as e:
+            return {"ok": False, "status": str(e)}
     tab = ctx.new_page()
     try:
         tab.goto(browser.HOME, wait_until="domcontentloaded")  # API calls need the instagram.com origin
         tab.wait_for_timeout(1500)
         if kind == "send":
             return {"ok": True, "status": browser.send_on_page(cfg, tab, body["text"], body.get("reply_to"))}
+        if kind == "seen":
+            return {"ok": True, "status": browser.seen_on_page(cfg, tab)}
         if kind == "cookies":
             browser.write_cookies(cfg, ctx)
             return {"ok": True, "status": "COOKIES WRITTEN"}

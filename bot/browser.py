@@ -13,6 +13,7 @@ import urllib.request
 from . import ig
 
 HOME = "https://www.instagram.com/direct/inbox/"
+CHECKPOINT_PATHS = ("/challenge", "/checkpoint", "scraping_warning")
 
 
 class InboxError(Exception):
@@ -120,6 +121,9 @@ def api(page, path):
                 "X-IG-App-ID": appId, "X-CSRFToken": csrf, "X-Requested-With": "XMLHttpRequest"}});
             return {status: r.status, url: r.url, body: await r.text()};
         }""", [path, ig.APP_ID])
+    if "checkpoint_required" in res["body"][:300] or any(k in res["url"] for k in CHECKPOINT_PATHS):
+        raise InboxError("INBOX ERROR: Instagram wants the account owner to answer a warning or check. "
+                         "Stop the bot and run: python botctl.py open")
     if res["status"] != 200 or "/accounts/login" in res["url"]:
         raise InboxError(f"INBOX ERROR: HTTP {res['status']} on {path} (logged out or blocked).")
     return json.loads(res["body"])
@@ -209,6 +213,23 @@ def send_on_page(cfg, page, text, reply_to=None):
     raise InboxError("SEND ERROR: typed and pressed Enter, but the message did not show up in the thread.")
 
 
+def seen_on_page(cfg, page):
+    """Open the owner's chat so Instagram shows him "Seen": he knows the bot has his message."""
+    t, viewer = page_thread(cfg, page)
+    if not t:
+        return "no conversation yet"
+    page.goto(f"https://www.instagram.com/direct/t/{t['thread_id']}/", wait_until="domcontentloaded")
+    page.wait_for_timeout(random.randint(4000, 6000))
+    dismiss_popups(page)
+    page.bring_to_front()
+    page.mouse.move(640, 430)  # a person's pointer over the conversation
+    page.wait_for_timeout(2500)
+    t2, _ = page_thread(cfg, page)
+    seen = (t2.get("last_seen_at") or {}).get(str(viewer.get("pk")), {}).get("item_id")
+    latest = (t2.get("items") or [{}])[0].get("item_id")
+    return "SEEN" if seen and seen == latest else "OPENED (Instagram has not marked it seen yet)"
+
+
 def _live(cfg, kind, payload=None):
     """Hand work to the always-open browser when live mode is running. None when it is not."""
     try:
@@ -250,6 +271,31 @@ def login(cfg):
             write_cookies(cfg, ctx)
         ctx.close()
     return ok
+
+
+def open_visible(cfg, url="https://www.instagram.com/"):
+    """Show the bot's browser so its owner can deal with something only a person should (a warning, a check)."""
+    from playwright.sync_api import sync_playwright
+    with ig.file_lock(cfg.data_dir / "browser.lock", stale=3600, wait=60), sync_playwright() as pw:
+        ctx = open_context(pw, cfg, headless=False)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.goto(url)
+        print("The bot's browser is open. Close the window when you are done.", flush=True)
+        try:  # closing the window closes the whole browser, so save the session while it is still open
+            while ctx.pages:
+                write_cookies(cfg, ctx)
+                ctx.pages[0].wait_for_timeout(5000)
+        except Exception:
+            pass
+        finally:
+            try:
+                ctx.close()
+            except Exception:
+                pass
+
+
+def mark_seen(cfg):
+    return _live(cfg, "seen") or session(cfg, lambda page: seen_on_page(cfg, page))
 
 
 def status(cfg):

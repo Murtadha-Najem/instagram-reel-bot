@@ -13,7 +13,8 @@ browser = "chrome"
 #               (about 200-400 MB of memory while your computer is on)
 #   "interval"  a check every interval_minutes; nothing stays running in between
 mode = "live"
-interval_minutes = 5   # interval mode: how often to check; live mode: a fallback check, in case the page misses one
+interval_minutes = 5        # interval mode: how often to check
+live_fallback_minutes = 15  # live mode: a safety check this often, in case the page misses a message
 max_workers = 2        # posts answered at the same time; each loads the audio model and an agent session
 
 [agent]
