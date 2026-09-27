@@ -1,33 +1,54 @@
 """The bot account's real browser profile: logging in once, keeping the cookies file fresh, and sending replies.
 
 Replies are typed into the message box of instagram.com like a person would, then confirmed through the API.
-Only one browser can open the profile at a time, so parallel workers queue on a lock here.
+Only one browser can open the profile at a time: in live mode the always-open browser does the sending
+(see live.py), otherwise each send opens the profile briefly and parallel workers queue on a lock.
 """
 import json
 import random
 import sys
 import time
+import urllib.request
 
 from . import ig
 
 HOME = "https://www.instagram.com/direct/inbox/"
 
 
+class InboxError(Exception):
+    """Something the agent should stop on: logged out, blocked, or a reply that did not arrive."""
+
+
+def _plain_user_agent(pw, cfg, channel):
+    """The browser's user agent without the "Headless" marker, read once from a throwaway browser and cached.
+    (Reading it from the profile itself meant opening the profile twice in a row, which could hang.)"""
+    f = cfg.user_dir / "user_agent.txt"
+    try:
+        cached = f.read_text(encoding="utf-8").split("\n")
+        if cached[0] == pw.chromium.executable_path + "|" + (channel or "") and cached[1]:
+            return cached[1]
+    except (OSError, IndexError):
+        pass
+    b = pw.chromium.launch(headless=True, **({"channel": channel} if channel else {}))
+    try:
+        ua = b.new_page().evaluate("navigator.userAgent")
+    finally:
+        b.close()
+    ua = ua.replace("HeadlessChrome", "Chrome").replace("Headless", "")
+    f.write_text(pw.chromium.executable_path + "|" + (channel or "") + "\n" + ua, encoding="utf-8")
+    return ua
+
+
 def open_context(pw, cfg, headless=True):
     cfg.profile.mkdir(parents=True, exist_ok=True)
+    channel = cfg.browser if cfg.browser != "chromium" else None
     kw = dict(headless=headless, locale="en-US", viewport={"width": 1280, "height": 860},
-              args=["--disable-blink-features=AutomationControlled"])
-    if cfg.browser != "chromium":
-        kw["channel"] = cfg.browser
-    ctx = pw.chromium.launch_persistent_context(str(cfg.profile), **kw)
-    if headless:
-        # headless browsers announce themselves in the user agent; present the ordinary one instead
-        ua = ctx.pages[0].evaluate("navigator.userAgent") if ctx.pages else ""
-        if "Headless" in ua:
-            ctx.close()
-            kw["user_agent"] = ua.replace("HeadlessChrome", "Chrome").replace("Headless", "")
-            ctx = pw.chromium.launch_persistent_context(str(cfg.profile), **kw)
-    return ctx
+              args=["--disable-blink-features=AutomationControlled"], timeout=60000)
+    if channel:
+        kw["channel"] = channel
+    if headless:  # headless browsers announce themselves in the user agent; present the ordinary one instead
+        kw["user_agent"] = _plain_user_agent(pw, cfg, channel)
+    return pw.chromium.launch_persistent_context(str(cfg.profile), **kw)
 
 
 def logged_in(ctx):
@@ -63,25 +84,29 @@ def load_cookie_file(cfg, ctx):
     return logged_in(ctx)
 
 
+def ready_page(cfg, ctx, url=HOME):
+    """A page on instagram.com with the bot account logged in."""
+    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+    page.goto(url, wait_until="domcontentloaded")
+    page.wait_for_timeout(random.randint(2500, 4000))
+    for _ in range(5):  # the cookie store loads a moment after start-up
+        if logged_in(ctx):
+            return page
+        page.wait_for_timeout(2000)
+    if not load_cookie_file(cfg, ctx):
+        raise InboxError("INBOX ERROR: the browser profile is not logged in. Run: python botctl.py login")
+    page.goto(url, wait_until="domcontentloaded")
+    page.wait_for_timeout(random.randint(2500, 4000))
+    return page
+
+
 def session(cfg, fn, headless=True):
-    """Run fn(page) on instagram.com inside the logged-in profile, one browser at a time."""
+    """Run fn(page) inside the logged-in profile, one browser at a time."""
     from playwright.sync_api import sync_playwright
     with ig.file_lock(cfg.data_dir / "browser.lock", stale=300, wait=600), sync_playwright() as pw:
         ctx = open_context(pw, cfg, headless)
         try:
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.goto(HOME, wait_until="domcontentloaded")
-            page.wait_for_timeout(random.randint(2500, 4000))
-            for _ in range(5):  # the cookie store loads a moment after start-up
-                if logged_in(ctx):
-                    break
-                page.wait_for_timeout(2000)
-            else:
-                if not load_cookie_file(cfg, ctx):
-                    sys.exit("INBOX ERROR: the browser profile is not logged in. Run: python botctl.py login")
-                page.goto(HOME, wait_until="domcontentloaded")
-                page.wait_for_timeout(random.randint(2500, 4000))
-            return fn(page)
+            return fn(ready_page(cfg, ctx))
         finally:
             ctx.close()
 
@@ -96,7 +121,7 @@ def api(page, path):
             return {status: r.status, url: r.url, body: await r.text()};
         }""", [path, ig.APP_ID])
     if res["status"] != 200 or "/accounts/login" in res["url"]:
-        sys.exit(f"INBOX ERROR: HTTP {res['status']} on {path} (logged out or blocked).")
+        raise InboxError(f"INBOX ERROR: HTTP {res['status']} on {path} (logged out or blocked).")
     return json.loads(res["body"])
 
 
@@ -155,6 +180,60 @@ def quote_target(cfg, page, item):
     return False
 
 
+def send_on_page(cfg, page, text, reply_to=None):
+    """Type one reply into the owner's thread on `page` and confirm it arrived. Returns a status line."""
+    t, _ = page_thread(cfg, page)
+    if not t:
+        raise InboxError(f"INBOX ERROR: no conversation with @{cfg.owner} yet. Send the bot a message first.")
+    page.goto(f"https://www.instagram.com/direct/t/{t['thread_id']}/", wait_until="domcontentloaded")
+    page.wait_for_timeout(random.randint(3000, 5000))
+    dismiss_popups(page)
+    box = page.locator('div[role="textbox"][contenteditable="true"]').first
+    box.wait_for(timeout=30000)
+    quoted = False
+    if reply_to:
+        item = next((it for it in t.get("items", []) if it["item_id"] == reply_to), None)
+        quoted = bool(item) and quote_target(cfg, page, item)
+    box.click()
+    page.wait_for_timeout(random.randint(400, 900))
+    page.keyboard.insert_text(text)
+    page.wait_for_timeout(random.randint(700, 1500))
+    page.keyboard.press("Enter")
+    for _ in range(10):  # confirm through the API that the message is now in the thread
+        page.wait_for_timeout(2000)
+        t2, viewer = page_thread(cfg, page)
+        if any(str(it.get("user_id")) == str(viewer.get("pk")) and ig.sent_text(it) == text
+               for it in t2.get("items", [])[:5]):
+            write_cookies(cfg, page.context)  # keep the plain-HTTP cookies fresh while here
+            return "SENT" + ("" if not reply_to else " (as a reply)" if quoted else " (quote not found, sent plain)")
+    raise InboxError("SEND ERROR: typed and pressed Enter, but the message did not show up in the thread.")
+
+
+def _live(cfg, kind, payload=None):
+    """Hand work to the always-open browser when live mode is running. None when it is not."""
+    try:
+        info = json.loads((cfg.data_dir / "live.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{info['port']}/{kind}", method="POST", data=json.dumps(payload or {}).encode(),
+        headers={"Content-Type": "application/json", "X-Token": info["token"]})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            res = json.loads(r.read())
+    except OSError:
+        return None  # the live browser is not answering: open the profile directly instead
+    if not res.get("ok"):
+        raise InboxError(res.get("status", "SEND ERROR"))
+    return res["status"]
+
+
+def send(cfg, text, reply_to=None):
+    text = " ".join(text.split())  # one line: Enter sends
+    return (_live(cfg, "send", {"text": text, "reply_to": reply_to})
+            or session(cfg, lambda page: send_on_page(cfg, page, text, reply_to)))
+
+
 def login(cfg):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
@@ -174,41 +253,9 @@ def login(cfg):
 
 
 def status(cfg):
-    session(cfg, lambda page: print(f"LOGGED IN as @{page_thread(cfg, page)[1].get('username')}"))
+    return _live(cfg, "status") or session(
+        cfg, lambda page: f"LOGGED IN as @{page_thread(cfg, page)[1].get('username')}")
 
 
 def refresh_cookies(cfg):
-    session(cfg, lambda page: write_cookies(cfg, page.context))
-
-
-def send(cfg, text, reply_to=None):
-    """Type a reply into the owner's thread and confirm it arrived. Returns a status line."""
-    text = " ".join(text.split())  # one line: Enter sends
-
-    def run(page):
-        t, _ = page_thread(cfg, page)
-        if not t:
-            sys.exit(f"INBOX ERROR: no conversation with @{cfg.owner} yet. Send the bot a message first.")
-        page.goto(f"https://www.instagram.com/direct/t/{t['thread_id']}/", wait_until="domcontentloaded")
-        page.wait_for_timeout(random.randint(3000, 5000))
-        dismiss_popups(page)
-        box = page.locator('div[role="textbox"][contenteditable="true"]').first
-        box.wait_for(timeout=30000)
-        quoted = False
-        if reply_to:
-            item = next((it for it in t.get("items", []) if it["item_id"] == reply_to), None)
-            quoted = bool(item) and quote_target(cfg, page, item)
-        box.click()
-        page.wait_for_timeout(random.randint(400, 900))
-        page.keyboard.insert_text(text)
-        page.wait_for_timeout(random.randint(700, 1500))
-        page.keyboard.press("Enter")
-        for _ in range(10):  # confirm through the API that the message is now in the thread
-            page.wait_for_timeout(2000)
-            t2, viewer = page_thread(cfg, page)
-            if any(str(it.get("user_id")) == str(viewer.get("pk")) and ig.sent_text(it) == text
-                   for it in t2.get("items", [])[:5]):
-                write_cookies(cfg, page.context)  # keep the plain-HTTP cookies fresh while here
-                return "SENT" + ("" if not reply_to else " (as a reply)" if quoted else " (quote not found, sent plain)")
-        sys.exit("SEND ERROR: typed and pressed Enter, but the message did not show up in the thread.")
-    return session(cfg, run)
+    return _live(cfg, "cookies") or session(cfg, lambda page: (write_cookies(cfg, page.context), "COOKIES WRITTEN")[1])

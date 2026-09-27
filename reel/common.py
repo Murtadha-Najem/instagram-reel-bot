@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # The permanent store for every post's video, frames, metadata and transcripts, not a disposable cache.
 # The bot sets these through the environment from config.toml; the defaults suit running reel.py by hand.
 DATA = Path(os.environ.get("REEL_DATA") or ROOT / "data")
-CACHE_ROOT = DATA / "cache"
+CACHE_ROOT = Path(os.environ.get("REEL_CACHE") or DATA / "cache")
 RECORDS = Path(os.environ.get("REEL_RECORDS") or DATA / "records")
 COOKIES = Path(os.environ.get("REEL_COOKIES") or Path.home() / ".config" / "reel" / "cookies.txt")
 PTS_RE = re.compile(r"pts_time:([0-9.]+)")

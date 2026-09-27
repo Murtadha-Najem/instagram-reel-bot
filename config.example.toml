@@ -8,7 +8,12 @@ owner = "your_main_account"
 browser = "chrome"
 
 [schedule]
-interval_minutes = 5   # how often to look for new messages (the check itself costs no tokens)
+# How the bot notices your messages:
+#   "live"      a headless browser stays on the Instagram inbox and reacts within seconds
+#               (about 200-400 MB of memory while your computer is on)
+#   "interval"  a check every interval_minutes; nothing stays running in between
+mode = "live"
+interval_minutes = 5   # interval mode: how often to check; live mode: a fallback check, in case the page misses one
 max_workers = 2        # posts answered at the same time; each loads the audio model and an agent session
 
 [agent]
@@ -19,6 +24,9 @@ max_workers = 2        # posts answered at the same time; each loads the audio m
 kind = "claude"
 model = ""      # empty = the CLI's default
 command = ""    # only for kind = "custom", e.g. "my-agent --prompt-file {prompt_file}"
+# Extra folders the agent may read to answer you, for example your notes or your own tools, so it can
+# answer "do I already have something like this?". It is told to change nothing outside the records.
+extra_dirs = []
 
 [reply]
 language = "English"
@@ -37,5 +45,7 @@ rules = []
 api_keys = []
 
 [paths]
-# data_dir = "~/instagram-reel-bot-data"   # videos, frames, transcripts, records, logs (default: ./data)
+# data_dir = "~/instagram-reel-bot-data"   # state, logs, and by default everything below (default: ./data)
+# cache_dir = ""                           # videos, frames, transcripts, metadata (default: data_dir/cache)
+# records_dir = ""                         # the searchable records (default: data_dir/records)
 # user_dir = ""                            # browser profile and cookies (default: your OS's app-data folder)

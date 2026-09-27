@@ -10,10 +10,14 @@ CONFIG_FILE = Path(os.environ.get("REEL_BOT_CONFIG") or ROOT / "config.toml")
 
 
 def _user_dir():
-    """Private per-user folder for the browser profile and cookies (never inside the repo)."""
+    """Private per-user folder for the browser profile and cookies (never inside the repo).
+
+    On Windows this is ~/.instagram-reel-bot, not AppData: a process started from a packaged (Store) app sees
+    a private, redirected copy of AppData, so a login made from such a terminal would be invisible to the
+    Task Scheduler. The home folder is the same for everyone."""
     if sys.platform == "win32":
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-    elif sys.platform == "darwin":
+        return Path.home() / ".instagram-reel-bot"
+    if sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support"
     else:
         base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
@@ -24,7 +28,8 @@ def _user_dir():
 class Config:
     owner: str                      # the only account whose messages are answered
     browser: str = "msedge"         # Playwright channel: msedge, chrome, or chromium
-    interval_minutes: int = 5
+    mode: str = "interval"          # "live" (a browser stays open and reacts at once) or "interval"
+    interval_minutes: int = 5       # interval mode: how often to check; live mode: the fallback check
     max_workers: int = 2
     agent: str = "claude"           # claude, codex, or custom
     agent_command: str = ""         # for custom: a command line, {prompt_file} is replaced
@@ -33,8 +38,11 @@ class Config:
     max_chars: int = 350
     reply_rules: list = field(default_factory=list)
     gemini_keys: list = field(default_factory=list)
+    agent_dirs: list = field(default_factory=list)  # extra folders the agent may read
     data_dir: Path = ROOT / "data"
     user_dir: Path = field(default_factory=_user_dir)
+    cache_dir: Path = None          # default: data_dir/cache
+    records_dir: Path = None        # default: data_dir/records
 
     # derived paths
     @property
@@ -42,9 +50,9 @@ class Config:
     @property
     def cookies(self): return self.user_dir / "cookies.txt"
     @property
-    def cache(self): return self.data_dir / "cache"
+    def cache(self): return self.cache_dir or self.data_dir / "cache"
     @property
-    def records(self): return self.data_dir / "records"
+    def records(self): return self.records_dir or self.data_dir / "records"
     @property
     def state_file(self): return self.data_dir / "state.json"
     @property
@@ -54,7 +62,7 @@ class Config:
 
     def pipeline_env(self):
         """Environment for reel.py: where to store things and which cookies and keys to use."""
-        env = dict(os.environ, REEL_DATA=str(self.data_dir), REEL_RECORDS=str(self.records),
+        env = dict(os.environ, REEL_DATA=str(self.data_dir), REEL_CACHE=str(self.cache), REEL_RECORDS=str(self.records),
                    REEL_COOKIES=str(self.cookies), PYTHONIOENCODING="utf-8")
         if self.gemini_keys:
             env["GEMINI_API_KEY"] = ",".join(self.gemini_keys)
@@ -72,6 +80,7 @@ def load():
     cfg = Config(
         owner=owner,
         browser=ig.get("browser", "msedge"),
+        mode=sched.get("mode", "interval"),
         interval_minutes=int(sched.get("interval_minutes", 5)),
         max_workers=int(sched.get("max_workers", 2)),
         agent=agent.get("kind", "claude"),
@@ -81,12 +90,19 @@ def load():
         max_chars=int(reply.get("max_chars", 350)),
         reply_rules=list(reply.get("rules", [])),
         gemini_keys=list(raw.get("gemini", {}).get("api_keys", [])),
+        agent_dirs=[Path(d).expanduser() for d in agent.get("extra_dirs", [])],
     )
+    if cfg.mode not in ("live", "interval"):
+        sys.exit(f'[schedule] mode must be "live" or "interval", not "{cfg.mode}".')
     paths = raw.get("paths", {})
     if paths.get("data_dir"):
         cfg.data_dir = Path(paths["data_dir"]).expanduser()
     if paths.get("user_dir"):
         cfg.user_dir = Path(paths["user_dir"]).expanduser()
-    for d in (cfg.data_dir, cfg.user_dir, cfg.records, cfg.turns, cfg.logs):
+    if paths.get("cache_dir"):
+        cfg.cache_dir = Path(paths["cache_dir"]).expanduser()
+    if paths.get("records_dir"):
+        cfg.records_dir = Path(paths["records_dir"]).expanduser()
+    for d in (cfg.data_dir, cfg.user_dir, cfg.cache, cfg.records, cfg.turns, cfg.logs):
         d.mkdir(parents=True, exist_ok=True)
     return cfg

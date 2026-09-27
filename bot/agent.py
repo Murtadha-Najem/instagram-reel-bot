@@ -20,13 +20,23 @@ def render_prompt(cfg, turn_file):
     )
 
 
+def _dirs(cfg):
+    """Folders the agent may use besides the bot's own: its data, and any extra folders from the config."""
+    out = []
+    for d in (cfg.data_dir, cfg.cache, cfg.records, *cfg.agent_dirs):
+        if str(d) not in out:
+            out.append(str(d))
+    return out
+
+
 def command(cfg, prompt, prompt_file):
     py = Path(sys.executable).as_posix()
+    add_dirs = [a for d in _dirs(cfg) for a in ("--add-dir", d)]
     if cfg.agent == "claude":
         exe = shutil.which("claude") or "claude"
         cmd = [exe, "-p", prompt,
                "--allowedTools", f"Bash({py}:*)", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
-               "--add-dir", str(cfg.data_dir),
+               *add_dirs,
                "--strict-mcp-config",           # no MCP servers: none are needed and loading them is slow
                "--disable-slash-commands",      # no skill listing either
                "--setting-sources", "project",  # leave the user's own hooks and settings out of these runs
@@ -37,8 +47,7 @@ def command(cfg, prompt, prompt_file):
     if cfg.agent == "codex":
         exe = shutil.which("codex") or "codex"
         cmd = [exe, "exec", "--skip-git-repo-check", "--sandbox", "workspace-write",
-               "-c", "sandbox_workspace_write.network_access=true",
-               "--add-dir", str(cfg.data_dir)]
+               "-c", "sandbox_workspace_write.network_access=true", *add_dirs]
         if cfg.agent_model:
             cmd += ["--model", cfg.agent_model]
         return cmd + [prompt]

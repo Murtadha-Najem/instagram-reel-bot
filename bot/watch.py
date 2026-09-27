@@ -2,8 +2,7 @@
 
 The check is plain HTTP: no browser and no agent when nothing is new. New messages are split into turns
 (a shared post with the texts about it, or loose texts). Each turn is claimed in the state file and handed
-to its own worker process: the reel pipeline, a short wait so a question typed right after the post can
-join it, then one agent session that replies to that turn only. Up to max_workers turns run at once, so a
+to its own worker process: the reel pipeline, then one agent session that replies to that turn only. Up to max_workers turns run at once, so a
 quick photo is not stuck behind a long video.
 """
 import json
@@ -166,11 +165,8 @@ def worker(cfg, tid):
                 analyse(cfg, it)
             elif it.get("image_url"):
                 save_image(cfg, tid, it)
-        post = next((i for i in turn if i["type"] != "text"), None)
-        if post:  # a text typed up to 3 minutes after the post belongs to it: wait for that window to close
-            wait = (post["timestamp"] + ig.AFTER) / 1e6 + 5 - time.time()
-            if wait > 0:
-                time.sleep(min(wait, ig.AFTER / 1e6 + 5))
+        # The agent starts as soon as the analysis is done: a question that arrived meanwhile joins the turn,
+        # one sent later is answered as a follow-up from the record.
         try:
             absorb_late_texts(cfg, tid, turn)
         except Exception as e:

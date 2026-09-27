@@ -140,9 +140,26 @@ def owner_items(thread):
 #              "done": ids handled after it, "active": {turn_id: {"items": [...], "started": t}},
 #              "tries": {turn_id: n}}
 
+def pid_alive(pid):
+    if os.name == "nt":
+        import ctypes
+        h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        code = ctypes.c_ulong()
+        ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
+        ctypes.windll.kernel32.CloseHandle(h)
+        return code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 @contextmanager
 def file_lock(path, stale=120, wait=300):
-    """Exclusive lock through an O_EXCL file; a lock older than `stale` seconds is taken over."""
+    """Exclusive lock through an O_EXCL file. Taken over when its holder has died, or is older than `stale` s."""
     deadline = time.time() + wait
     while True:
         try:
@@ -152,10 +169,11 @@ def file_lock(path, stale=120, wait=300):
             break
         except FileExistsError:
             try:
-                if time.time() - path.stat().st_mtime > stale:
+                holder = int(path.read_text() or 0)
+                if not pid_alive(holder) or time.time() - path.stat().st_mtime > stale:
                     path.unlink(missing_ok=True)
                     continue
-            except OSError:
+            except (OSError, ValueError):
                 continue
             if time.time() > deadline:
                 raise TimeoutError(f"lock {path.name} busy")
