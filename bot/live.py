@@ -19,10 +19,18 @@ from . import browser, ig
 from .config import ROOT
 from .watch import NO_WINDOW, log
 
-WATCH_ROW = """
+WATCH_ROW = r"""
 (() => {
   const NAME = %s;
-  let last = null;
+  // The row reads [name, last message, "·", age]. Two shared reels in a row show the same last message
+  // ("X sent an attachment."), so a new message is also recognised by its age starting again from zero.
+  const age = s => {
+    const m = /^(\d+)\s*([smhdwy])/i.exec(s || '');
+    if (/^(now|just now)$/i.test((s || '').trim())) return 0;
+    if (!m) return null;
+    return +m[1] * ({s: 1, m: 60, h: 3600, d: 86400, w: 604800, y: 31536000}[m[2].toLowerCase()]);
+  };
+  let last = null, lastAge = null;
   setInterval(() => {
     // the chat row is the button around the text-only span holding the owner's display name
     const name = [...document.querySelectorAll('span')].find(s => !s.children.length && s.textContent.trim() === NAME);
@@ -30,10 +38,12 @@ WATCH_ROW = """
     if (!row || !window.__reelbotPing) return;
     const leaves = [...row.querySelectorAll('span')].filter(s => !s.children.length)
                      .map(s => s.textContent.trim()).filter(Boolean);
-    const preview = leaves[1] || '';   // [name, last message, "·", time]: the time is left out on purpose
+    const preview = leaves[1] || '';
+    const a = age(leaves[leaves.length - 1]);
     if (last === null) window.__reelbotPing('');          // first sight of the row
-    else if (preview !== last) window.__reelbotPing(preview);
+    else if (preview !== last || (a !== null && lastAge !== null && a < lastAge)) window.__reelbotPing(preview || '?');
     last = preview;
+    lastAge = a;
   }, 1000);
 })();
 """

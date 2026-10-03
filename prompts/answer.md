@@ -44,8 +44,8 @@ Paths (always call Python by this full path with absolute script paths; never `c
    ## In the chat (<date>)
    <his question in his words, or "no question">, and a one-line gist of your reply
    ```
-6. Send the reply as an Instagram reply to his message, so he sees which message it answers:
-   `{python} "{root}/botctl.py" send "<reply>" --reply-to <item_id>`, where the item is his question in your turn, or the shared post itself when he wrote nothing. It must print a line starting with `SENT`.
+6. Send the reply as an Instagram reply to his message, so he sees which message it answers. Write the reply text, and nothing else, to `{reply_file}` with the Write tool, then run this exact command with the Bash tool (no `cd`, no environment variables in front, nothing chained):
+   `{python} "{root}/botctl.py" send --file "{reply_file}" --reply-to <item_id>`, where the item is his question in your turn, or the shared post itself when he wrote nothing. It must print a line starting with `SENT`. (Commands are pre-approved only in exactly this shape; any other shape waits for an approval that never comes.)
    (When he asked for several messages, send them one after another as described under The reply.)
    Then mark every message of your turn as handled: `{python} "{root}/botctl.py" done <every item_id in your turn file>`.
    If send prints `INBOX ERROR` or `SEND ERROR`, stop: do not retry and do not try another way.

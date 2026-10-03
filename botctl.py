@@ -12,7 +12,7 @@
   python botctl.py check [--now]         one check for new messages (interval mode runs this on a timer)
   python botctl.py check --dry-run       show the turns that would be answered, change nothing
   python botctl.py fetch                 list unhandled messages as JSON
-  python botctl.py send "<text>" [--reply-to <item_id>]    send a reply (the agent uses this)
+  python botctl.py send "<text>" | --file <path> [--reply-to <item_id>]    send a reply (the agent uses --file)
   python botctl.py done <item_id>...     mark messages as handled (the agent uses this)
   python botctl.py cookies               refresh the cookies file from the browser profile
   python botctl.py seen                  open the owner's chat so he sees "Seen" (workers do this on pickup)
@@ -61,8 +61,21 @@ def main(argv):
         (schedule.install if args[0] == "install" else schedule.remove)(cfg)
     elif cmd == "fetch":
         print(json.dumps(ig.pending(ig.owner_thread(cfg), ig.read_state(cfg)), ensure_ascii=False, indent=1))
-    elif cmd == "send" and len(args) in (1, 3) and (len(args) == 1 or args[1] == "--reply-to"):
-        print(browser.send(cfg, args[0], args[2] if len(args) == 3 else None))
+    elif cmd == "send" and args:
+        # send "<text>" | send --file <path>, then optionally --reply-to <item_id>
+        rest = list(args)
+        reply_to = None
+        if "--reply-to" in rest:
+            i = rest.index("--reply-to")
+            reply_to = rest[i + 1] if i + 1 < len(rest) else sys.exit(__doc__)
+            del rest[i:i + 2]
+        if rest[:1] == ["--file"] and len(rest) == 2:
+            text = open(rest[1], encoding="utf-8").read()
+        elif len(rest) == 1:
+            text = rest[0]
+        else:
+            sys.exit(__doc__)
+        print(browser.send(cfg, text, reply_to))
     elif cmd == "done" and args:
         try:
             t = ig.owner_thread(cfg)

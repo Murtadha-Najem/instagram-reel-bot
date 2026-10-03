@@ -10,13 +10,28 @@ from .config import ROOT
 NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
+def python_command():
+    """How the agent should call Python. A plain `python` when it is this same interpreter: a full path with a
+    space in it (C:/Users/First Last/...) gets quoted by the agent and then no longer matches the permission
+    rule, so every command waits for an approval that never comes in a headless run."""
+    exe = Path(sys.executable)
+    if exe.stem.lower() == "pythonw":  # workers started by the scheduler run windowless; the agent needs python
+        exe = exe.with_name("python" + exe.suffix)
+    found = shutil.which("python")
+    if found and Path(found).resolve() == exe.resolve():
+        return "python"
+    path = exe.as_posix()
+    return f'"{path}"' if " " in path else path
+
+
 def render_prompt(cfg, turn_file):
     rules = "\n".join(f"- {r}" for r in cfg.reply_rules) or "- (none)"
     text = (ROOT / "prompts" / "answer.md").read_text(encoding="utf-8")
     return text.format(
-        owner=cfg.owner, python=Path(sys.executable).as_posix(), root=ROOT.as_posix(),
+        owner=cfg.owner, python=python_command(), root=ROOT.as_posix(),
         records=cfg.records.as_posix(), language=cfg.language, max_chars=cfg.max_chars,
         rules=rules, turn_file=Path(turn_file).as_posix(),
+        reply_file=Path(turn_file).with_suffix(".reply.txt").as_posix(),
     )
 
 
@@ -30,12 +45,14 @@ def _dirs(cfg):
 
 
 def command(cfg, prompt, prompt_file):
-    py = Path(sys.executable).as_posix()
+    py = python_command()
     add_dirs = [a for d in _dirs(cfg) for a in ("--add-dir", d)]
     if cfg.agent == "claude":
         exe = shutil.which("claude") or "claude"
+        # the same Python allowed in both shells: on Windows the agent may reach for PowerShell first
         cmd = [exe, "-p", prompt,
-               "--allowedTools", f"Bash({py}:*)", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
+               "--allowedTools", f"Bash({py}:*)", f"PowerShell({py}:*)",
+               "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
                *add_dirs,
                "--strict-mcp-config",           # no MCP servers: none are needed and loading them is slow
                "--disable-slash-commands",      # no skill listing either
@@ -66,4 +83,5 @@ def run(cfg, turn_file, log_file, timeout=1800):
         p = subprocess.run(command(cfg, prompt, prompt_file), cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT,
                            stdin=subprocess.DEVNULL, creationflags=NO_WINDOW, timeout=timeout)
     prompt_file.unlink(missing_ok=True)
+    Path(turn_file).with_suffix(".reply.txt").unlink(missing_ok=True)
     return p.returncode
