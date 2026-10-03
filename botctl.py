@@ -16,6 +16,8 @@
   python botctl.py done <item_id>...     mark messages as handled (the agent uses this)
   python botctl.py chat --brief <file> --title "<title>"   open a Claude conversation about a post in the
                                          desktop app (the agent uses this when asked to "start a conversation")
+  python botctl.py discover [--reels N]  one discovery session now: skim the Reels tab, score, like, and send
+                                         what passes (the bot starts these by itself when [discover] is enabled)
   python botctl.py cookies               refresh the cookies file from the browser profile
   python botctl.py seen                  open the owner's chat so he sees "Seen" (workers do this on pickup)
 """
@@ -81,6 +83,10 @@ def main(argv):
     elif cmd == "chat" and len(args) == 4 and args[0] == "--brief" and args[2] == "--title":
         from bot import chat
         print(chat.open_chat(cfg, args[1], args[3]))
+    elif cmd == "discover":
+        from bot import discover
+        n = int(args[1]) if args[:1] == ["--reels"] and len(args) == 2 else None
+        discover.session(cfg, n)
     elif cmd == "done" and args:
         try:
             t = ig.owner_thread(cfg)

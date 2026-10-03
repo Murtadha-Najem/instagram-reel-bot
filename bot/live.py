@@ -15,7 +15,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import browser, ig
+from . import browser, discover, ig
 from .config import ROOT
 from .watch import NO_WINDOW, log
 
@@ -119,6 +119,7 @@ def _run(cfg, dry_run):
             fallback = time.time() - every
             cookies_at = reload_at = time.time()
             last_check, pending_ping, proc = 0.0, False, None
+            discover_at, disc = 0.0, None
             while True:
                 page.wait_for_timeout(500)   # lets the page and its callbacks run
                 now = time.time()
@@ -134,6 +135,11 @@ def _run(cfg, dry_run):
                     proc, last_check, pending_ping, fallback = _spawn_check(cfg, dry_run), now, False, now
                 elif now - fallback > every and not running:
                     proc, last_check, fallback = _spawn_check(cfg, dry_run), now, now
+                if now - discover_at > 60:   # a discovery session, when one is due
+                    discover_at = now
+                    if (disc is None or disc.poll() is not None) and not dry_run and discover.due(cfg):
+                        disc = subprocess.Popen([sys.executable, str(ROOT / "botctl.py"), "discover"], cwd=ROOT,
+                                                creationflags=NO_WINDOW, stdout=subprocess.DEVNULL)
                 while not jobs.empty():
                     kind, body, slot = jobs.get()
                     slot["result"] = _job(cfg, ctx, page, kind, body)
@@ -157,6 +163,34 @@ def _run(cfg, dry_run):
             ctx.close()
 
 
+DISCOVERY = {}  # the Reels tab of a discovery session, kept open between its steps
+
+
+def _reels(ctx, body):
+    """One step of a discovery session (see browser.reels): its tab stays open from "start" to "stop"."""
+    op = body.get("op")
+    if op in ("start", "stop") and DISCOVERY.get("tab"):
+        try:
+            DISCOVERY["tab"].close()
+        except Exception:
+            pass
+        DISCOVERY.clear()
+    if op == "start":
+        tab = ctx.new_page()
+        DISCOVERY.update(tab=tab, known={}, box=browser.reels_start(tab))
+        return "STARTED"
+    if op == "stop":
+        return "STOPPED"
+    if op == "like" and not DISCOVERY.get("tab"):
+        DISCOVERY.update(tab=ctx.new_page(), known={}, box=[])
+    tab = DISCOVERY["tab"]
+    if op == "scroll":
+        return json.dumps(browser.reels_scroll(tab, DISCOVERY["box"], DISCOVERY["known"], int(body.get("n", 8))))
+    if op == "like":
+        return browser.reels_like(tab, body["code"])
+    return f"unknown reels step {op}"
+
+
 def _job(cfg, ctx, page, kind, body):
     """Work handed over by other processes, done in this browser. Reads use the open page itself, so a check
     in live mode is just the web app asking its own API; anything that navigates gets a second tab."""
@@ -166,6 +200,15 @@ def _job(cfg, ctx, page, kind, body):
             return {"ok": True, "status": json.dumps({"thread": t, "viewer": viewer})}
         except browser.InboxError as e:
             return {"ok": False, "status": str(e)}
+    if kind == "reels":
+        try:
+            return {"ok": True, "status": _reels(ctx, body)}
+        except browser.InboxError as e:
+            _reels(ctx, {"op": "stop"})
+            return {"ok": False, "status": str(e)}
+        except Exception as e:
+            _reels(ctx, {"op": "stop"})
+            return {"ok": False, "status": f"REELS ERROR: {type(e).__name__}: {e}"}
     tab = ctx.new_page()
     try:
         tab.goto(browser.HOME, wait_until="domcontentloaded")  # API calls need the instagram.com origin

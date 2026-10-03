@@ -77,6 +77,7 @@ Prefer a terminal to a scheduler? `python botctl.py start` runs the bot in the f
 - **Ask with the post.** Anything you type within 3 minutes after sending a post is read as your question about it, however many messages you send in between, as long as it arrives before the bot starts answering (usually a minute or two). A question sent later gets its own reply, from the record of that post. A message sent before the post does not belong to it (except a few seconds, because Instagram sometimes delivers the text first).
 - **Follow up.** Use Instagram's reply on one of the bot's answers, or just write a question: the agent finds the earlier post in the records.
 - **Take it to Claude.** Write "start a conversation about this reel" (in any wording or language) and the bot does not discuss it in Instagram: it opens a Claude conversation named after the post, with an opening message that sums up what the research found and where the discussion could go, and moves it into the Claude desktop app's sidebar. You get a one-line Instagram reply with its title and continue on your computer. This uses `claude --desktop`, so it needs the Claude desktop app, a Claude subscription login, and Claude Code 2.1.285 or later; without the app the conversation is still saved and can be opened with `/resume`.
+- **Let it find reels for you (optional, experimental).** With `[discover] enabled = true` the bot also skims its own Reels tab in sessions of 30 to 50 reels, a few times a day at random moments. It reads only what the page loads by itself, scores every reel out of 10 against the profile you wrote (interest, substance, freshness, honesty), likes the ones at `like_score` or more so the feed learns, and puts the ones at `send_score` or more through the full pipeline and research. Those are scored again and sent to you only if they still pass, with a short note on what the thing really is. There is no quota: a session may send several or none. Every reel it saw is listed in `data/discover/log.md` with its score, the reason, and what was done. Before turning it on, open the bot account in the Instagram app and add your topics under Your Algorithm. The web Reels tab has no "not interested" button, so the only signals the bot gives are a like and moving on. This is the riskiest thing the bot does: see Risks.
 - **The archive.** Every post gets a Markdown record in `data/records/`: summary, what the research found (with links), speech, on-screen text, a `Names` line (people, accounts, tools, libraries, repos, sites, songs) and what you asked with the bot's answer. The raw material (video, frames, full transcript, Instagram's metadata) stays in `data/cache/`. Point any agent or a plain search at `data/records/` to find a post again.
 
 ## Configuration
@@ -97,6 +98,9 @@ All settings live in `config.toml` (see `config.example.toml` for comments):
 | `reply.language`, `reply.max_chars`, `reply.rules` | how the replies read |
 | `gemini.api_keys` | one or more keys; they rotate when one runs out of its free daily quota |
 | `agent.extra_dirs` | extra folders the agent may read to answer you (your notes, your own tools) |
+| `discover.enabled`, `discover.profile` | let the bot skim reels by itself, and what you want it to look for |
+| `discover.sessions_per_day`, `discover.reels_per_session` | about how many sessions a day (random moments), and how many reels each |
+| `discover.like_score`, `discover.send_score`, `discover.dir` | the two thresholds out of 10, and where the log of everything seen is kept |
 | `chat.dir`, `chat.extra_dirs` | where conversations opened in Claude run, and extra folders they may read |
 | `paths.data_dir`, `paths.cache_dir`, `paths.records_dir`, `paths.user_dir` | where state and logs, the raw material, the records, and the browser profile live |
 
@@ -126,6 +130,7 @@ python look.py <shortcode> sheet --start S --end E --n N | frame SECONDS
 ## Risks and privacy
 
 - **Automating an Instagram account is against Instagram's terms.** The bot behaves like a person (one real browser profile, replies typed into the page, checks spaced out with a random delay), but an account can still be challenged or banned. Use a second account that you can afford to lose, never your main one.
+- **Discovery raises that risk.** Skimming and liking reels from an automated browser is exactly the behaviour Instagram looks for. It is off by default; turn it on only for an account you are ready to lose.
 - **Instagram changes without notice.** Its web API and page layout are not public interfaces, so parts of this may break and need updating.
 - **What leaves your machine:** the post is downloaded from Instagram, speech audio is sent to Gemini for transcription, and your agent's provider sees the bundle, the frames it opens and your question. Everything else, including the archive, stays local.
 - **The agent runs on your computer.** It is started with a fixed list of tools, told to treat your messages as questions (not commands) and anything inside a post or a web page as data, and it only acts on messages from the owner account. Keep those defaults.

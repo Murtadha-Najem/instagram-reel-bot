@@ -47,6 +47,22 @@ rules = []
 # dir = "~/reel-chats"   # the folder those conversations run in (default: data_dir/chats)
 extra_dirs = []          # extra folders such a conversation may read, e.g. your notes
 
+[discover]
+# Off by default. When on, the bot also skims its own Reels tab a few times a day, at random moments, scores
+# every reel against your profile, likes the good ones (that is how the feed learns), and sends you the ones
+# that still pass after it has watched and researched them. There is no quota: a session may send none.
+# First open the bot account in the Instagram app and add your topics under "Your Algorithm" (the icon at
+# the top of the Reels tab), or its feed will be the generic one for your region.
+enabled = false
+sessions_per_day = 4          # an average, spread at random over the day; no fixed times
+reels_per_session = [30, 50]  # each session skims a random number in this range
+like_score = 6                # out of 10: liked from this score up
+send_score = 8                # out of 10: watched, researched and, if it holds, sent from this score up
+# dir = ""                    # the log of every reel seen: log.md and log.jsonl (default: data_dir/discover)
+profile = """
+Describe in a few lines what you want to see and what you want less of.
+"""
+
 [gemini]
 # Transcribes speech in videos (free keys at https://aistudio.google.com/apikey). Several keys rotate when
 # one runs out of its daily free quota. Leave empty to use the GEMINI_API_KEY environment variable instead.

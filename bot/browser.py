@@ -294,6 +294,155 @@ def open_visible(cfg, url="https://www.instagram.com/"):
                 pass
 
 
+# ---------- discovery: reading the Reels tab ----------
+
+REELS = "https://www.instagram.com/reels/"
+IN_VIEW = """(want) => {
+  const out = [];
+  for (const e of document.querySelectorAll('svg[aria-label]')) {
+    const r = e.getBoundingClientRect();
+    if (!r.width || r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) continue;
+    if (e.getAttribute('aria-label') === want) out.push([r.left + r.width / 2, r.top + r.height / 2]);
+  }
+  return out;
+}"""
+
+
+def _challenged(page):
+    if "/accounts/login" in page.url:
+        raise InboxError("INBOX ERROR: the browser profile is not logged in. Run: python botctl.py login")
+    if any(k in page.url for k in CHECKPOINT_PATHS):
+        raise InboxError("INBOX ERROR: Instagram wants the account owner to answer a warning or check. "
+                         "Stop the bot and run: python botctl.py open")
+
+
+def _media(o, known, ad=False):
+    """Collect every reel in a piece of Instagram's own JSON, keyed by shortcode."""
+    if isinstance(o, dict):
+        user = o.get("user")
+        if o.get("code") and isinstance(user, dict) and "like_count" in o and o["code"] not in known:
+            cap = o.get("caption")
+            covers = (o.get("image_versions2") or {}).get("candidates") or []
+            known[o["code"]] = {
+                "account": user.get("username"), "name": user.get("full_name"), "verified": user.get("is_verified"),
+                "caption": (cap.get("text") if isinstance(cap, dict) else "") or "",
+                "likes": o.get("like_count"), "comments": o.get("comment_count"),
+                "plays": o.get("play_count") or o.get("ig_play_count") or o.get("view_count"),
+                "seconds": o.get("video_duration"), "posted": o.get("taken_at"),
+                "paid": bool(o.get("is_paid_partnership")), "ad": ad,
+                "cover_url": covers[0].get("url") if covers else None,
+            }
+        for v in o.values():
+            _media(v, known, ad)
+    elif isinstance(o, list):
+        for v in o:
+            _media(v, known, ad)
+
+
+def reels_start(page):
+    """Open the Reels tab and start listening to what the page loads by itself. Returns the response box."""
+    box = []
+    page.on("response", lambda r: box.append(r) if "/graphql/" in r.url else None)
+    page.goto(REELS, wait_until="domcontentloaded")
+    page.wait_for_timeout(random.randint(4500, 7000))
+    _challenged(page)
+    return box
+
+
+def _drain(box, known):
+    while box:
+        r = box.pop(0)
+        try:
+            body = r.text()
+            if body.startswith("{"):
+                _media(json.loads(body), known, ad="Ads" in (r.request.post_data or ""))
+        except Exception:
+            pass
+
+
+def reels_scroll(page, box, known, n):
+    """Move through n reels the way a person skims them. Makes no request of its own: the reels' details
+    come from the responses the page asked for itself (the first ones are inside the page's HTML)."""
+    if not known:
+        try:
+            for text in page.evaluate("""() => [...document.querySelectorAll('script[type="application/json"]')]
+                                         .map(s => s.textContent).filter(t => t.includes('like_count'))"""):
+                _media(json.loads(text), known)
+        except Exception:
+            pass
+    out = []
+    page.bring_to_front()
+    for _ in range(n):
+        page.wait_for_timeout(random.randint(2500, 6500))
+        _challenged(page)
+        _drain(box, known)
+        code = page.url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+        if code != "reels" and not any(o["code"] == code for o in out):
+            out.append({"code": code, **known.get(code, {})})
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(random.randint(700, 1500))
+    return out
+
+
+def reels_like(page, code):
+    """Open one reel, like it and watch a little: the only positive signal the web Reels tab offers."""
+    page.goto(f"{REELS}{code}/", wait_until="domcontentloaded")
+    page.wait_for_timeout(random.randint(3500, 6000))
+    _challenged(page)
+    page.bring_to_front()
+    hits = page.evaluate(IN_VIEW, "Like")
+    if not hits:
+        return "already liked" if page.evaluate(IN_VIEW, "Unlike") else "no like button"
+    x, y = hits[0]
+    page.mouse.move(x + random.randint(-3, 3), y + random.randint(-3, 3))
+    page.wait_for_timeout(random.randint(300, 800))
+    page.mouse.down()
+    page.mouse.up()
+    page.wait_for_timeout(random.randint(1200, 2000))
+    ok = bool(page.evaluate(IN_VIEW, "Unlike"))
+    page.wait_for_timeout(random.randint(4000, 9000))
+    return "liked" if ok else "like did not register"
+
+
+def reels_session(cfg, total, like_codes=()):
+    """Without live mode: one visit to the profile that skims `total` reels and likes `like_codes`."""
+    def run(page):
+        out = {"items": [], "likes": {}}
+        if total:
+            box, known = reels_start(page), {}
+            out["items"] = reels_scroll(page, box, known, total)
+        for code in like_codes:
+            out["likes"][code] = reels_like(page, code)
+        write_cookies(cfg, page.context)
+        return out
+    return session(cfg, run)
+
+
+def reels(cfg, total=0, like_codes=()):
+    """Skim `total` reels and/or like some. In live mode the open browser does it in short steps, so replies
+    and new messages are not held up for the whole session."""
+    if _live(cfg, "reels", {"op": "start" if total else "stop"}) is None:
+        return reels_session(cfg, total, like_codes)
+    out = {"items": [], "likes": {}}
+    try:
+        if total:
+            while len(out["items"]) < total:
+                step = json.loads(_live(cfg, "reels", {"op": "scroll", "n": min(8, total - len(out["items"]))}))
+                if not step:
+                    break
+                out["items"] += [i for i in step if not any(o["code"] == i["code"] for o in out["items"])]
+                time.sleep(random.uniform(1, 4))
+        for code in like_codes:
+            out["likes"][code] = _live(cfg, "reels", {"op": "like", "code": code})
+            time.sleep(random.uniform(2, 8))
+    finally:
+        try:
+            _live(cfg, "reels", {"op": "stop"})
+        except InboxError:
+            pass
+    return out
+
+
 def mark_seen(cfg):
     return _live(cfg, "seen") or session(cfg, lambda page: seen_on_page(cfg, page))
 

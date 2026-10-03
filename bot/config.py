@@ -46,6 +46,13 @@ class Config:
     records_dir: Path = None        # default: data_dir/records
     chats_dir: Path = None          # default: data_dir/chats; conversations opened in Claude start here
     chat_dirs: list = field(default_factory=list)   # extra folders a conversation may read (e.g. his notes)
+    discover: bool = False          # skim the Reels tab in sessions and send what passes the scoring
+    discover_profile: str = ""      # what the owner cares about, in his own words
+    sessions_per_day: float = 4     # about this many sessions a day, at random moments
+    session_reels: tuple = (30, 50)  # reels skimmed in one session: a random number in this range
+    like_score: int = 6             # a reel scoring this or more gets a like (it steers the feed)
+    send_score: int = 8             # a reel scoring this or more is watched, researched, and sent if it holds
+    discover_dir: Path = None       # default: data_dir/discover; the log of everything seen lives here
 
     # derived paths
     @property
@@ -58,6 +65,8 @@ class Config:
     def records(self): return self.records_dir or self.data_dir / "records"
     @property
     def chats(self): return self.chats_dir or self.data_dir / "chats"
+    @property
+    def discovery(self): return self.discover_dir or self.data_dir / "discover"
     @property
     def state_file(self): return self.data_dir / "state.json"
     @property
@@ -113,6 +122,15 @@ def load():
     if chat.get("dir"):
         cfg.chats_dir = Path(chat["dir"]).expanduser()
     cfg.chat_dirs = [Path(d).expanduser() for d in chat.get("extra_dirs", [])]
+    disc = raw.get("discover", {})
+    cfg.discover = bool(disc.get("enabled", False))
+    cfg.discover_profile = disc.get("profile", "").strip()
+    cfg.sessions_per_day = float(disc.get("sessions_per_day", 4))
+    cfg.session_reels = tuple(sorted(int(n) for n in disc.get("reels_per_session", [30, 50])))[:2]
+    cfg.like_score = int(disc.get("like_score", 6))
+    cfg.send_score = int(disc.get("send_score", 8))
+    if disc.get("dir"):
+        cfg.discover_dir = Path(disc["dir"]).expanduser()
     for d in (cfg.data_dir, cfg.user_dir, cfg.cache, cfg.records, cfg.turns, cfg.logs):
         d.mkdir(parents=True, exist_ok=True)
     return cfg

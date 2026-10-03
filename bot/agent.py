@@ -39,7 +39,7 @@ def render_prompt(cfg, turn_file):
 def _dirs(cfg):
     """Folders the agent may use besides the bot's own: its data, and any extra folders from the config."""
     out = []
-    for d in (cfg.data_dir, cfg.cache, cfg.records, *cfg.agent_dirs):
+    for d in (cfg.data_dir, cfg.cache, cfg.records, *([cfg.discovery] if cfg.discover else []), *cfg.agent_dirs):
         if str(d) not in out:
             out.append(str(d))
     return out

@@ -87,6 +87,11 @@ def check(cfg, jitter=True, dry_run=False):
         log(cfg, f"turn {tid}: {n} message(s), starting a worker")
         procs.append(subprocess.Popen([sys.executable, str(ROOT / "botctl.py"), "worker", tid], cwd=ROOT,
                                       creationflags=NO_WINDOW))
+    if cfg.mode != "live":  # in live mode the open browser starts the discovery sessions itself
+        from . import discover
+        if discover.due(cfg):
+            procs.append(subprocess.Popen([sys.executable, str(ROOT / "botctl.py"), "discover"], cwd=ROOT,
+                                          creationflags=NO_WINDOW))
     for p in procs:  # the scheduler allows overlapping checks, so waiting here delays nothing
         p.wait()
 
