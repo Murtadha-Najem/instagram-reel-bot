@@ -136,7 +136,7 @@ def _log(cfg, stamp, rows):
         sent = sum(r["action"] == "sent" for r in rows)
         liked = sum(r["action"] in ("sent", "liked", "checked") for r in rows)
         fh.write(f"\n## {datetime.now():%Y-%m-%d %H:%M} ({len(rows)} seen, {liked} liked, {sent} sent)\n\n"
-                 "| score | action | account | what | why | link |\n|---|---|---|---|---|---|\n")
+                 "| score | action | account | idea | why | link |\n|---|---|---|---|---|---|\n")
         cell = lambda s: " ".join(str(s or "").split()).replace("|", "/")
         for r in sorted(rows, key=lambda r: -(r.get("score") or 0)):
             score = r.get("final_score", r.get("score"))
@@ -144,7 +144,7 @@ def _log(cfg, stamp, rows):
             if r.get("final_score") is not None:
                 score = f"{float(r['score']):g} then {score}"   # first look, then after watching and research
             fh.write(f"| {score} | {r['action']} | @{r.get('account') or '?'} | "
-                     f"{cell(r.get('caption'))[:90]} | {cell(r.get('final_reason') or r.get('reason'))[:160]} | "
+                     f"{cell(r.get('idea') or r.get('caption'))[:90]} | {cell(r.get('final_reason') or r.get('reason'))[:160]} | "
                      f"[open](https://www.instagram.com/reel/{r['code']}/) |\n")
 
 
@@ -176,9 +176,7 @@ def _session(cfg, total):
         if it["code"] in before:
             continue  # shown again by Instagram: already in the log
         rows.append(it)
-        if it.get("ad"):
-            it.update(action="ad", reason="an advert")
-        elif not it.get("account"):
+        if not it.get("account"):
             it.update(action="skipped", reason="the page gave no details for this one")
         else:
             fresh.append(it)
