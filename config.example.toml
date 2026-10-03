@@ -40,6 +40,13 @@ max_chars = 350
 #   ]
 rules = []
 
+[chat]
+# Write something like "start a conversation about this reel" and, instead of discussing it in Instagram,
+# the bot opens a Claude conversation about the post and moves it into the Claude desktop app, where it
+# waits in the sidebar. Needs kind = "claude" and the desktop app on this computer.
+# dir = "~/reel-chats"   # the folder those conversations run in (default: data_dir/chats)
+extra_dirs = []          # extra folders such a conversation may read, e.g. your notes
+
 [gemini]
 # Transcribes speech in videos (free keys at https://aistudio.google.com/apikey). Several keys rotate when
 # one runs out of its daily free quota. Leave empty to use the GEMINI_API_KEY environment variable instead.

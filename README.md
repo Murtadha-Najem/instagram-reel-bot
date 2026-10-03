@@ -76,6 +76,7 @@ Prefer a terminal to a scheduler? `python botctl.py start` runs the bot in the f
 
 - **Ask with the post.** Anything you type within 3 minutes after sending a post is read as your question about it, however many messages you send in between, as long as it arrives before the bot starts answering (usually a minute or two). A question sent later gets its own reply, from the record of that post. A message sent before the post does not belong to it (except a few seconds, because Instagram sometimes delivers the text first).
 - **Follow up.** Use Instagram's reply on one of the bot's answers, or just write a question: the agent finds the earlier post in the records.
+- **Take it to Claude.** Write "start a conversation about this reel" (in any wording or language) and the bot does not discuss it in Instagram: it opens a Claude conversation named after the post, with an opening message that sums up what the research found and where the discussion could go, and moves it into the Claude desktop app's sidebar. You get a one-line Instagram reply with its title and continue on your computer. This uses `claude --desktop`, so it needs the Claude desktop app, a Claude subscription login, and Claude Code 2.1.285 or later; without the app the conversation is still saved and can be opened with `/resume`.
 - **The archive.** Every post gets a Markdown record in `data/records/`: summary, what the research found (with links), speech, on-screen text, a `Names` line (people, accounts, tools, libraries, repos, sites, songs) and what you asked with the bot's answer. The raw material (video, frames, full transcript, Instagram's metadata) stays in `data/cache/`. Point any agent or a plain search at `data/records/` to find a post again.
 
 ## Configuration
@@ -96,6 +97,7 @@ All settings live in `config.toml` (see `config.example.toml` for comments):
 | `reply.language`, `reply.max_chars`, `reply.rules` | how the replies read |
 | `gemini.api_keys` | one or more keys; they rotate when one runs out of its free daily quota |
 | `agent.extra_dirs` | extra folders the agent may read to answer you (your notes, your own tools) |
+| `chat.dir`, `chat.extra_dirs` | where conversations opened in Claude run, and extra folders they may read |
 | `paths.data_dir`, `paths.cache_dir`, `paths.records_dir`, `paths.user_dir` | where state and logs, the raw material, the records, and the browser profile live |
 
 The agent's instructions are in `prompts/answer.md`; edit them to change the bot's manner.

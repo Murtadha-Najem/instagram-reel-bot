@@ -32,6 +32,7 @@ def render_prompt(cfg, turn_file):
         records=cfg.records.as_posix(), language=cfg.language, max_chars=cfg.max_chars,
         rules=rules, turn_file=Path(turn_file).as_posix(),
         reply_file=Path(turn_file).with_suffix(".reply.txt").as_posix(),
+        chat_brief_file=Path(turn_file).with_suffix(".brief.md").as_posix(),
     )
 
 
@@ -83,5 +84,6 @@ def run(cfg, turn_file, log_file, timeout=1800):
         p = subprocess.run(command(cfg, prompt, prompt_file), cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT,
                            stdin=subprocess.DEVNULL, creationflags=NO_WINDOW, timeout=timeout)
     prompt_file.unlink(missing_ok=True)
-    Path(turn_file).with_suffix(".reply.txt").unlink(missing_ok=True)
+    for suffix in (".reply.txt", ".brief.md"):
+        Path(turn_file).with_suffix(suffix).unlink(missing_ok=True)
     return p.returncode

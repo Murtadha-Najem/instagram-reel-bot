@@ -44,6 +44,8 @@ class Config:
     user_dir: Path = field(default_factory=_user_dir)
     cache_dir: Path = None          # default: data_dir/cache
     records_dir: Path = None        # default: data_dir/records
+    chats_dir: Path = None          # default: data_dir/chats; conversations opened in Claude start here
+    chat_dirs: list = field(default_factory=list)   # extra folders a conversation may read (e.g. his notes)
 
     # derived paths
     @property
@@ -54,6 +56,8 @@ class Config:
     def cache(self): return self.cache_dir or self.data_dir / "cache"
     @property
     def records(self): return self.records_dir or self.data_dir / "records"
+    @property
+    def chats(self): return self.chats_dir or self.data_dir / "chats"
     @property
     def state_file(self): return self.data_dir / "state.json"
     @property
@@ -105,6 +109,10 @@ def load():
         cfg.cache_dir = Path(paths["cache_dir"]).expanduser()
     if paths.get("records_dir"):
         cfg.records_dir = Path(paths["records_dir"]).expanduser()
+    chat = raw.get("chat", {})
+    if chat.get("dir"):
+        cfg.chats_dir = Path(chat["dir"]).expanduser()
+    cfg.chat_dirs = [Path(d).expanduser() for d in chat.get("extra_dirs", [])]
     for d in (cfg.data_dir, cfg.user_dir, cfg.cache, cfg.records, cfg.turns, cfg.logs):
         d.mkdir(parents=True, exist_ok=True)
     return cfg

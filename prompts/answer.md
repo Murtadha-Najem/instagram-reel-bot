@@ -51,6 +51,14 @@ Paths (always call Python by this full path with absolute script paths; never `c
    If send prints `INBOX ERROR` or `SEND ERROR`, stop: do not retry and do not try another way.
 7. End with one line: answered or not, and anything that failed.
 
+## When he asks to start a conversation
+If his message asks to open or start a conversation or discussion about a post ("بلش محادثة بخصوص هذا الريل", "خلي نتناقش بيه", "open a chat about this", "let's discuss this one"), he does not want to discuss it in Instagram. He wants a real Claude conversation waiting for him on his computer. So:
+- Do steps 1 to 5 as usual (find the post his message is about: the post in your turn, or, for a text that replies to one of your earlier answers, that post's record).
+- Write a brief to `{chat_brief_file}` with the Write tool: what the post is, what the research found (names and links), what he said in his own words, and the full path of the record file or files.
+- Run this exact command with the Bash tool: `{python} "{root}/botctl.py" chat --brief "{chat_brief_file}" --title "<a short title for the conversation, in his language, at most 50 characters, no quotation marks>"`. It takes a minute or two and prints a line starting with `CHAT OPENED` or `CHAT READY`.
+- Then send one short Instagram reply (step 6) telling him the conversation is open in Claude and what it is called; if the line said `CHAT READY`, say it is saved and he can open it with /resume in the Claude app. Do not ask him questions in Instagram and do not start the discussion there.
+- If the command prints `CHAT ERROR`, tell him briefly in the Instagram reply that the conversation could not be opened, and answer his message normally.
+
 Do not create scratch files in the bot folder.
 
 ## The reply
