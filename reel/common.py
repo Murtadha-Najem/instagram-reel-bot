@@ -20,12 +20,18 @@ class ReelError(Exception):
     """A failure with a message the user can act on."""
 
 
+# Under pythonw there is no console, so each console tool (ffmpeg, ffprobe, yt-dlp) would open its own window for
+# a moment. Zero on other systems.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def run(cmd, **kw):
+    kw.setdefault("creationflags", NO_WINDOW)
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **kw)
 
 
 def run_bytes(cmd):
-    p = subprocess.run(cmd, capture_output=True)
+    p = subprocess.run(cmd, capture_output=True, creationflags=NO_WINDOW)
     if p.returncode != 0:
         raise ReelError(f"{cmd[0]} failed: {p.stderr.decode('utf-8', 'replace')[-400:]}")
     return p.stdout
