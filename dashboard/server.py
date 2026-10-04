@@ -1,4 +1,5 @@
 """A local control page for the bot's discovery: watch what it saw and sent, and change how it works.
+The page is in Arabic and English; errors travel as keys and the page words them.
 
   python dashboard/server.py        then open http://localhost:8798
 
@@ -68,13 +69,14 @@ def bot_alive(cfg):
 
 def set_bot(on):
     if sys.platform != "win32":
-        raise RuntimeError("تشغيل وإيقاف البوت من هنا يشتغل على ويندوز بس")
+        raise RuntimeError("windows_only")
     name = schedule.NAME
     if on:
         _ps(f"Enable-ScheduledTask -TaskName '{name}' | Out-Null; Start-ScheduledTask -TaskName '{name}'")
     else:  # the task restarts the bot every 10 minutes, so stopping it means disabling the task too
         _ps(f"Disable-ScheduledTask -TaskName '{name}' | Out-Null; Stop-ScheduledTask -TaskName '{name}';"
-            "Start-Sleep 2; Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'botctl\\.py' -or "
+            "Start-Sleep 2; Get-CimInstance Win32_Process | Where-Object { "
+            "($_.Name -match '^pythonw?\\.exe$' -and $_.CommandLine -match 'botctl\\.py') -or "
             "($_.Name -eq 'msedge.exe' -and $_.CommandLine -match 'instagram-reel-bot') } | "
             "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
     return task_state(fresh=True)
@@ -93,9 +95,9 @@ def session_running(cfg):
 
 def start_session(cfg, reels):
     if reels is not None and not (isinstance(reels, int) and 5 <= reels <= 100):
-        raise ValueError("عدد الريلز لازم يكون بين 5 و 100")
+        raise ValueError("reels_range")
     if session_running(cfg):
-        raise RuntimeError("أكو جلسة شغالة هسه، انتظرها تخلص")
+        raise RuntimeError("session_running")
     exe = Path(sys.executable)
     if exe.stem.lower() == "python" and exe.with_name("pythonw" + exe.suffix).exists():
         exe = exe.with_name("pythonw" + exe.suffix)
@@ -158,6 +160,7 @@ def state():
         "at": r.get("seen_at"),
     } for r in sorted(rows, key=lambda r: r.get("seen_at") or "", reverse=True)[:500]]
     return {
+        "lang": "ar" if "arab" in cfg.language.lower() else "en",   # the page opens in the reply language
         "bot": {"mode": cfg.mode, "alive": bot_alive(cfg), "task": task_state(), "problem": last_problem(cfg)},
         "session": {"running": session_running(cfg),
                     "next_at": discover._read(cfg.discovery / "state.json", {}).get("next_at")},
@@ -181,20 +184,20 @@ def save_settings(data):
          "like_score": cfg.like_score, "send_score": cfg.send_score, "profile": cfg.discover_profile}
     v.update({k: data[k] for k in v if k in data})
     if not isinstance(v["enabled"], bool):
-        raise ValueError("قيمة التشغيل غير مفهومة")
+        raise ValueError("bad_enabled")
     if not isinstance(v["sessions_per_day"], (int, float)) or not 0.5 <= v["sessions_per_day"] <= 12:
-        raise ValueError("عدد الجلسات باليوم لازم يكون بين نص جلسة و 12")
+        raise ValueError("bad_rate")
     lo, hi = v["reels"] if isinstance(v["reels"], list) and len(v["reels"]) == 2 else (0, 0)
     if not all(isinstance(n, int) for n in (lo, hi)) or not 5 <= lo <= hi <= 100:
-        raise ValueError("عدد الريلز بالجلسة لازم يكون بين 5 و 100، والأقل قبل الأكثر")
+        raise ValueError("bad_reels")
     if not all(isinstance(v[k], int) for k in ("like_score", "send_score")) \
             or not 1 <= v["like_score"] <= v["send_score"] <= 10:
-        raise ValueError("الدرجات بين 1 و 10، ودرجة اللايك ما تزيد على درجة الإرسال")
+        raise ValueError("bad_scores")
     profile = (v["profile"] or "").strip()
     if len(profile) < 40:
-        raise ValueError("وصف الاهتمامات قصير كلش، المقيّم ما راح يعرف شنو يختار")
+        raise ValueError("short_profile")
     if "'''" in profile:
-        raise ValueError("شيل الثلاث فواصل المتتالية من النص")
+        raise ValueError("bad_quotes")
     block = "\n".join([
         "[discover]",
         "# written by the dashboard; the keys are explained in config.example.toml",
@@ -217,7 +220,7 @@ def save_settings(data):
         fresh = config.load()
     except BaseException:  # never leave the bot with a config it cannot read
         path.write_text(text, encoding="utf-8")
-        raise ValueError("الإعدادات ما انقرت بعد الحفظ، رجعت النسخة القديمة")
+        raise ValueError("config_unreadable")
     if fresh.sessions_per_day != cfg.sessions_per_day or (fresh.discover and not cfg.discover):
         discover.plan_next(fresh, first=not cfg.discover)
     return {"ok": True}
@@ -225,11 +228,11 @@ def save_settings(data):
 
 def set_feedback(code, value):
     if value not in ("liked", "disliked", None):
-        raise ValueError("رأي غير معروف")
+        raise ValueError("bad_feedback")
     cfg = config.load()
     row = next((r for r in discover._rows(cfg) if r["code"] == code), None)
     if not row:
-        raise ValueError("هذا الريل مو بالسجل")
+        raise ValueError("unknown_reel")
     row.update(feedback=value, feedback_emoji=None, feedback_from="dashboard")
     if value != "liked":
         row.pop("saved", None)

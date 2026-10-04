@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>اكتشاف الريلز</title>
+<title>Reel discovery</title>
 <style>
 @font-face { font-family: "Readex Pro"; font-weight: 300 700; font-display: swap;
   src: url(/fonts/readex-pro-300-700-arabic.woff2) format("woff2");
@@ -191,19 +191,23 @@ pre .e { color: var(--bad); } pre .g { color: var(--ok); }
   .state-chip span.t { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+[dir="ltr"] .switch input:checked + span::after { transform: translateX(18px); }
+.lang { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; font-size: 14px; }
+.lang:hover { border-color: var(--muted); }
 </style>
 </head>
 <body>
 <header class="top"><div class="top-in">
-  <div class="brand">اكتشاف الريلز</div>
-  <div class="state-chip" id="chip"><i class="dot"></i><span class="t" id="chipText">يحمّل</span></div>
-  <button class="btn primary" id="runTop">ابدي جلسة هسه</button>
+  <div class="brand" data-t="brand"></div>
+  <div class="state-chip" id="chip"><i class="dot"></i><span class="t" id="chipText"></span></div>
+  <button class="lang" id="langBtn" type="button"></button>
+  <button class="btn primary" id="runTop" data-t="runNow"></button>
 </div></header>
 
 <div class="shell">
-  <nav class="side" id="nav" aria-label="أقسام اللوحة">
-    <a href="#run">التشغيل</a><a href="#sessions">الجلسات</a><a href="#scoring">التقييم</a>
-    <a href="#profile">الاهتمامات</a><a href="#ideas">الأفكار</a><a href="#log">السجل</a>
+  <nav class="side" id="nav">
+    <a href="#run" data-t="navRun"></a><a href="#sessions" data-t="navSessions"></a><a href="#scoring" data-t="navScoring"></a>
+    <a href="#profile" data-t="navProfile"></a><a href="#ideas" data-t="navIdeas"></a><a href="#log" data-t="navLog"></a>
   </nav>
 
   <main>
@@ -214,96 +218,96 @@ pre .e { color: var(--bad); } pre .g { color: var(--ok); }
     </div>
 
     <section id="run">
-      <h2>التشغيل</h2>
-      <p class="sub">الجلسة تقلب الريلز بحساب البوت، تقيّم فكرة كل ريل، تدوس لايك للزين، وتفحص الأحسن بعمق قبل ما تدزه إلك بالانستا. تاخذ من 5 دقايق لنص ساعة حسب عدد الأفكار اللي تعدي.</p>
+      <h2 data-t="navRun"></h2>
+      <p class="sub" data-t="runSub"></p>
       <div class="row">
-        <div class="fieldset"><label for="runReels">عدد الريلز</label>
-          <input type="number" id="runReels" min="5" max="100" placeholder="عشوائي"></div>
-        <button class="btn primary" id="runBtn">ابدي الجلسة</button>
-        <label class="check"><span class="switch"><input type="checkbox" id="botOn" role="switch"><span></span></span> <span id="botLbl">البوت شغال</span></label>
+        <div class="fieldset"><label for="runReels" data-t="reelCount"></label>
+          <input type="number" id="runReels" min="5" max="100"></div>
+        <button class="btn primary" id="runBtn" data-t="startSession"></button>
+        <label class="check"><span class="switch"><input type="checkbox" id="botOn" role="switch"><span></span></span> <span id="botLbl"></span></label>
       </div>
       <div class="progress" id="progress" hidden>
         <div class="head"><i class="dot busy" id="progDot"></i><span id="progText"></span></div>
         <pre id="progLog"></pre>
       </div>
-      <h3 class="lbl">آخر الجلسات</h3>
-      <table><thead><tr><th>الوقت</th><th class="num">شاف</th><th class="num">لايك</th><th class="num">انرسل</th></tr></thead><tbody id="runs"></tbody></table>
+      <h3 class="lbl" data-t="lastSessions"></h3>
+      <table><thead><tr><th data-t="thTime"></th><th class="num" data-t="thSeen"></th><th class="num" data-t="thLiked"></th><th class="num" data-t="thSent"></th></tr></thead><tbody id="runs"></tbody></table>
     </section>
 
     <section id="sessions">
-      <h2>الجلسات</h2>
-      <p class="sub">ماكو أوقات ثابتة. البوت يختار موعد كل جلسة عشوائياً حتى يطلع المعدل اليومي اللي تحدده، وعدد الريلز بكل جلسة عشوائي بين الرقمين.</p>
+      <h2 data-t="navSessions"></h2>
+      <p class="sub" data-t="sessSub"></p>
       <div class="row">
-        <label class="check"><span class="switch"><input type="checkbox" id="discOn" role="switch"><span></span></span> الاكتشاف التلقائي شغال</label>
+        <label class="check"><span class="switch"><input type="checkbox" id="discOn" role="switch"><span></span></span> <span data-t="discOn"></span></label>
       </div>
       <div class="row" style="margin-top:14px">
-        <div class="fieldset"><span class="lbl" id="spdLbl">معدل الجلسات باليوم</span>
+        <div class="fieldset"><span class="lbl" id="spdLbl" data-t="perDay"></span>
           <div class="stepper" role="group" aria-labelledby="spdLbl">
-            <button type="button" data-step="spd" data-d="-0.5" aria-label="أقل">&minus;</button>
+            <button type="button" data-step="spd" data-d="-0.5" data-ta="less">&minus;</button>
             <output id="spd">4</output>
-            <button type="button" data-step="spd" data-d="0.5" aria-label="أكثر">+</button>
+            <button type="button" data-step="spd" data-d="0.5" data-ta="more">+</button>
           </div></div>
-        <div class="fieldset"><label for="reelsMin">أقل عدد ريلز</label><input type="number" id="reelsMin" min="5" max="100"></div>
-        <div class="fieldset"><label for="reelsMax">أكثر عدد ريلز</label><input type="number" id="reelsMax" min="5" max="100"></div>
-        <button class="btn" id="sessSave">احفظ الجلسات</button>
+        <div class="fieldset"><label for="reelsMin" data-t="reelsMin"></label><input type="number" id="reelsMin" min="5" max="100"></div>
+        <div class="fieldset"><label for="reelsMax" data-t="reelsMax"></label><input type="number" id="reelsMax" min="5" max="100"></div>
+        <button class="btn" id="sessSave" data-t="saveSessions"></button>
       </div>
       <p class="sub" id="sessInfo" style="margin-top:14px"></p>
     </section>
 
     <section id="scoring">
-      <h2>التقييم</h2>
-      <p class="sub">كل فكرة تاخذ درجة من 10: الاهتمام من 4، وجود شي حقيقي بيها من 3، والجِدّة من 3. الريل نفسه وصاحبه ما ينحسبون. الدرجتين هنا تحددان شنو ياخذ لايك وشنو ينفحص وينرسل.</p>
+      <h2 data-t="navScoring"></h2>
+      <p class="sub" data-t="scoreSub"></p>
       <div class="row">
-        <div class="fieldset"><span class="lbl" id="likeLbl">لايك من درجة</span>
+        <div class="fieldset"><span class="lbl" id="likeLbl" data-t="likeFrom"></span>
           <div class="stepper" role="group" aria-labelledby="likeLbl">
-            <button type="button" data-step="like" data-d="-1" aria-label="أقل">&minus;</button>
+            <button type="button" data-step="like" data-d="-1" data-ta="less">&minus;</button>
             <output id="like">6</output>
-            <button type="button" data-step="like" data-d="1" aria-label="أكثر">+</button>
+            <button type="button" data-step="like" data-d="1" data-ta="more">+</button>
           </div></div>
-        <div class="fieldset"><span class="lbl" id="sendLbl">فحص وإرسال من درجة</span>
+        <div class="fieldset"><span class="lbl" id="sendLbl" data-t="sendFrom"></span>
           <div class="stepper" role="group" aria-labelledby="sendLbl">
-            <button type="button" data-step="send" data-d="-1" aria-label="أقل">&minus;</button>
+            <button type="button" data-step="send" data-d="-1" data-ta="less">&minus;</button>
             <output id="send">8</output>
-            <button type="button" data-step="send" data-d="1" aria-label="أكثر">+</button>
+            <button type="button" data-step="send" data-d="1" data-ta="more">+</button>
           </div></div>
-        <button class="btn" id="scoreSave">احفظ الدرجات</button>
+        <button class="btn" id="scoreSave" data-t="saveScores"></button>
       </div>
       <div class="scale" aria-hidden="true">
         <div class="track" id="track"></div>
         <div class="ticks"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span></div>
-        <div class="key"><span>ينعبر</span><span class="k-like">لايك بس</span><span class="k-send">لايك وفحص وإرسال</span></div>
+        <div class="key"><span data-t="keySkip"></span><span class="k-like" data-t="keyLike"></span><span class="k-send" data-t="keySend"></span></div>
       </div>
       <p class="sub" id="scoreInfo" style="margin-top:16px"></p>
     </section>
 
     <section id="profile">
-      <h2>الاهتمامات</h2>
-      <p class="sub">هذا النص يروح للمقيّم حرفياً بكل جلسة. اكتب بيه شنو يهمك وشنو تريد أقل منه، بأي لغة. آراؤك على الأفكار المرسلة تنضاف فوگه كأمثلة، ووزنها أعلى منه.</p>
-      <label class="lbl" for="taste">وصف اهتماماتك</label>
+      <h2 data-t="navProfile"></h2>
+      <p class="sub" data-t="profileSub"></p>
+      <label class="lbl" for="taste" data-t="profileLbl"></label>
       <textarea id="taste" spellcheck="false" dir="auto"></textarea>
       <div class="row" style="margin-top:14px">
-        <button class="btn" id="tasteSave">احفظ الاهتمامات</button>
+        <button class="btn" id="tasteSave" data-t="saveProfile"></button>
         <span class="lbl" id="tasteState"></span>
       </div>
     </section>
 
     <section id="ideas">
-      <h2>الأفكار</h2>
+      <h2 data-t="navIdeas"></h2>
       <p class="sub" id="ideasSub"></p>
-      <div class="dist" id="dist" aria-label="توزيع الدرجات"></div>
-      <div class="chips" role="group" aria-label="فلترة الأفكار" id="chips"></div>
+      <div class="dist" id="dist"></div>
+      <div class="chips" role="group" id="chips"></div>
       <ul class="posts" id="ideaList"></ul>
-      <button class="btn ghost small more" id="moreBtn" hidden>اعرض أكثر</button>
+      <button class="btn ghost small more" id="moreBtn" hidden data-t="showMore"></button>
     </section>
 
     <section id="log">
-      <h2>السجل</h2>
-      <p class="sub">آخر ما كتبه البوت. إذا جلسة وگفت أو انستا طلب تسجيل دخول، السبب مكتوب هنا.</p>
+      <h2 data-t="navLog"></h2>
+      <p class="sub" data-t="logSub"></p>
       <div class="row" style="margin-bottom:12px">
-        <label class="check"><input type="checkbox" id="logDisc" checked> الاكتشاف بس</label>
-        <button class="btn ghost small" id="logRefresh">حدّث</button>
+        <label class="check"><input type="checkbox" id="logDisc" checked> <span data-t="logOnly"></span></label>
+        <button class="btn ghost small" id="logRefresh" data-t="refresh"></button>
       </div>
-      <pre id="logBox" tabindex="0" aria-label="سجل البوت"></pre>
+      <pre id="logBox" tabindex="0"></pre>
     </section>
   </main>
 </div>
@@ -312,19 +316,135 @@ pre .e { color: var(--bad); } pre .g { color: var(--ok); }
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let S = null, filter = 'sent', shown = 40, polling = null, loaded = false;
+let S = null, filter = 'sent', shown = 40, polling = null, loaded = false, lang = null, stored = null;
+try { stored = localStorage.getItem('lang'); } catch (e) {}
 const V = {spd: 4, like: 6, send: 8};
 
+// ------------------------------------------------------------------ the two languages
+const T = {
+ar: {
+  title: 'اكتشاف الريلز', brand: 'اكتشاف الريلز', other: 'English', runNow: 'ابدي جلسة هسه',
+  navRun: 'التشغيل', navSessions: 'الجلسات', navScoring: 'التقييم', navProfile: 'الاهتمامات', navIdeas: 'الأفكار', navLog: 'السجل',
+  runSub: 'الجلسة تقلب الريلز بحساب البوت، تقيّم فكرة كل ريل، تدوس لايك للزين، وتفحص الأحسن بعمق قبل ما تدزه إلك بالانستا. تاخذ من 5 دقايق لساعة حسب عدد الأفكار اللي تعدي.',
+  reelCount: 'عدد الريلز', random: 'عشوائي', startSession: 'ابدي الجلسة', botOn: 'البوت شغال', botOff: 'البوت موقوف',
+  lastSessions: 'آخر الجلسات', thTime: 'الوقت', thSeen: 'شاف', thLiked: 'لايك', thSent: 'انرسل',
+  noSessions: 'ماكو جلسات مسجلة بعد. ابدي وحدة من الزر فوگ.',
+  sessSub: 'ماكو أوقات ثابتة. البوت يختار موعد كل جلسة عشوائياً حتى يطلع المعدل اليومي اللي تحدده، وعدد الريلز بكل جلسة عشوائي بين الرقمين.',
+  discOn: 'الاكتشاف التلقائي شغال', perDay: 'معدل الجلسات باليوم', reelsMin: 'أقل عدد ريلز', reelsMax: 'أكثر عدد ريلز', saveSessions: 'احفظ الجلسات',
+  less: 'أقل', more: 'أكثر',
+  sessInfo: (n, a, b, d) => `المحفوظ هسه: ${n} جلسات باليوم تقريباً، وكل جلسة بين ${a} و ${b} ريل. يعني حوالي ${d} ريل باليوم إذا الجهاز مفتوح طول اليوم.`,
+  scoreSub: 'كل فكرة تاخذ درجة من 10: الاهتمام من 4، وجود شي حقيقي بيها من 3، والجِدّة من 3. الريل نفسه وصاحبه ما ينحسبون. الدرجتين هنا تحددان شنو ياخذ لايك وشنو ينفحص وينرسل.',
+  likeFrom: 'لايك من درجة', sendFrom: 'فحص وإرسال من درجة', saveScores: 'احفظ الدرجات',
+  keySkip: 'ينعبر', keyLike: 'لايك بس', keySend: 'لايك وفحص وإرسال',
+  scoreInfo: (n, l, p, s) => `بهذي الدرجات، من آخر ${n} ريل متقيم: ${l} ياخذ لايك (${p}%)، و ${s} ينفحص بعمق.`,
+  profileSub: 'هذا النص يروح للمقيّم حرفياً بكل جلسة. اكتب بيه شنو يهمك وشنو تريد أقل منه، بأي لغة. آراؤك على الأفكار المرسلة تنضاف فوگه كأمثلة، ووزنها أعلى منه.',
+  profileLbl: 'وصف اهتماماتك', saveProfile: 'احفظ الاهتمامات', unsaved: 'أكو تعديل ما انحفظ بعد.',
+  ideasSub: (seen, sent, liked, rej) => `من ${seen} ريل شافه لحد هسه، انرسلت ${sent}. عجبتك ${liked}${rej ? ' ورفضت ' + rej : ''}. رأيك ينقرا من قلبك على الرسالة بالانستا، أو من الأزرار هنا.`,
+  b810: '8 إلى 10', b67: '6 و 7', b35: '3 إلى 5', b02: '0 إلى 2',
+  fSent: 'انرسلت', fWaiting: 'بلا رأي منك', fChecked: 'انفحصت وما انرسلت', fLiked: 'لايك بس', fAll: 'كل ما شافه',
+  aSent: 'انرسلت', aChecked: 'انفحصت وما انرسلت', aPending: 'تنتظر الفحص', aLiked: 'لايك', aSkipped: 'انعبرت',
+  first: 'أول', noIdea: 'بدون وصف', replied: 'رديت عليها بالانستا', yes: 'عجبتني', no: 'ما عجبتني', verdict: 'رأيك بهذي الفكرة',
+  eSent: 'ما انرسل شي بعد. أول فكرة تعدي درجة الإرسال تظهر هنا.', eWaiting: 'عطيت رأيك بكل اللي انرسل. ماكو شي ينتظرك.',
+  eChecked: 'ماكو فكرة انفحصت وطاحت.', eLiked: 'ماكو ريلز أخذت لايك بدون إرسال.', eAll: 'السجل فارغ. ابدي جلسة حتى ينملي.',
+  showMore: 'اعرض أكثر', logSub: 'آخر ما كتبه البوت. إذا جلسة وگفت أو انستا طلب تسجيل دخول، السبب مكتوب هنا.',
+  logOnly: 'الاكتشاف بس', refresh: 'حدّث', logEmpty: 'السجل فارغ.',
+  hRunning: 'جلسة شغالة هسه.', hNone: 'اليوم بعد ما صارت ولا جلسة.',
+  hToday: (seen, sent) => 'اليوم شاف ' + arCount(seen, 'ريل واحد', 'ريلين', 'ريلز', 'ريل') + ' و' + (sent ? 'دزلك ' + arCount(sent, 'فكرة وحدة', 'فكرتين', 'أفكار', 'فكرة') : 'ما دز شي') + '.',
+  sStopped: 'البوت موقوف، ف ماكو جلسات ولا ردود لحد ما تشغله.', sOff: 'الاكتشاف التلقائي مطفي. البوت يرد على رسايلك بس.',
+  sSoon: 'الجلسة الجاية خلال دقايق.', sNext: (day, time) => `الجلسة الجاية ${day} حوالي الساعة ${time}.`,
+  today: 'اليوم', tomorrow: 'باچر', yesterday: 'أمس', locale: 'ar-IQ-u-nu-latn',
+  pLogin: 'انستا طلّع حساب البوت', pLoginDo: 'افتح الطرفية بفولدر البوت وشغّل python botctl.py login وسجل دخول بالنافذة.',
+  pCheck: 'انستا يطلب تأكيد من صاحب الحساب', pCheckDo: 'وگف البوت من هنا، شغّل python botctl.py open، وجاوب على التحذير بنفسك.',
+  pFail: 'آخر جلسة وگفت قبل ما تكمل', pFailDo: 'الجلسة الجاية تكمل اللي بقى. السبب:',
+  cRunning: 'جلسة شغالة', cStopped: 'البوت موقوف', cOn: 'البوت شغال', cReplies: 'ردود بس',
+  pgStart: 'بدت الجلسة', pgAuto: 'جلسة شغالة، بداها البوت لحاله.',
+  pgRun: m => `شغالة، مضى ${m} دقيقة. التقليب أول، بعدها التقييم، بعدها الفحص العميق.`,
+  pgDone: 'خلصت الجلسة.', pgFail: 'الجلسة وگفت. السبب بآخر السطور.', tDone: 'خلصت الجلسة', tFail: 'الجلسة وگفت قبل ما تكمل',
+  confirmStop: 'إيقاف البوت يوگف الردود على رسايلك والجلسات، ويقطع أي رد أو جلسة شغالة هسه. توگفه؟',
+  tBotOn: 'البوت اشتغل، يحتاج نص دقيقة حتى يفتح المتصفح', tBotOff: 'البوت انوگف',
+  tDiscOn: 'الاكتشاف التلقائي اشتغل', tDiscOff: 'الاكتشاف التلقائي انطفى، والردود باقية',
+  tSess: 'انحفظت الجلسات، وتغيّر موعد الجلسة الجاية', tScores: 'انحفظت الدرجات، وتطبق من الجلسة الجاية', tProfile: 'انحفظت الاهتمامات، وتطبق من الجلسة الجاية',
+  tYes: 'انحسبت: فكرة مثل هاي تاخذ درجة أعلى', tNo: 'انحسبت: فكرة مثل هاي تاخذ درجة أقل', tClear: 'انشال رأيك',
+  loadFail: 'اللوحة ما گدرت تقرا حالة البوت.', reqFail: 'الطلب فشل',
+  err: { reels_range: 'عدد الريلز لازم يكون بين 5 و 100', session_running: 'أكو جلسة شغالة هسه، انتظرها تخلص', windows_only: 'تشغيل وإيقاف البوت من هنا يشتغل على ويندوز بس',
+    bad_enabled: 'قيمة التشغيل غير مفهومة', bad_rate: 'عدد الجلسات باليوم لازم يكون بين نص جلسة و 12', bad_reels: 'عدد الريلز بالجلسة لازم يكون بين 5 و 100، والأقل قبل الأكثر',
+    bad_scores: 'الدرجات بين 1 و 10، ودرجة اللايك ما تزيد على درجة الإرسال', short_profile: 'وصف الاهتمامات قصير كلش، المقيّم ما راح يعرف شنو يختار',
+    bad_quotes: 'شيل الثلاث فواصل المتتالية من النص', config_unreadable: 'الإعدادات ما انقرت بعد الحفظ، رجعت النسخة القديمة', bad_feedback: 'رأي غير معروف', unknown_reel: 'هذا الريل مو بالسجل', forbidden: 'الطلب مرفوض' },
+},
+en: {
+  title: 'Reel discovery', brand: 'Reel discovery', other: 'عربي', runNow: 'Start a session now',
+  navRun: 'Run', navSessions: 'Sessions', navScoring: 'Scoring', navProfile: 'Interests', navIdeas: 'Ideas', navLog: 'Log',
+  runSub: 'A session skims the Reels tab on the bot account, scores the idea in each reel, likes the good ones, and checks the best in depth before sending them to you on Instagram. It takes 5 minutes to an hour, depending on how many ideas pass.',
+  reelCount: 'Reels', random: 'random', startSession: 'Start the session', botOn: 'Bot running', botOff: 'Bot stopped',
+  lastSessions: 'Recent sessions', thTime: 'Time', thSeen: 'Seen', thLiked: 'Liked', thSent: 'Sent',
+  noSessions: 'No sessions recorded yet. Start one with the button above.',
+  sessSub: 'There are no fixed times. The bot picks the moment of each session at random so that the daily average comes out as you set it, and each session skims a random number of reels between the two limits.',
+  discOn: 'Automatic discovery is on', perDay: 'Sessions a day, on average', reelsMin: 'Fewest reels', reelsMax: 'Most reels', saveSessions: 'Save sessions',
+  less: 'Less', more: 'More',
+  sessInfo: (n, a, b, d) => `Saved now: about ${n} sessions a day, each between ${a} and ${b} reels. That is roughly ${d} reels a day if the computer stays on all day.`,
+  scoreSub: 'Each idea gets a score out of 10: interest out of 4, how real and specific it is out of 3, and freshness out of 3. The reel itself and its creator do not count. The two scores here decide what gets a like and what is checked and sent.',
+  likeFrom: 'Like from a score of', sendFrom: 'Check and send from', saveScores: 'Save scores',
+  keySkip: 'Skipped', keyLike: 'Like only', keySend: 'Like, check and send',
+  scoreInfo: (n, l, p, s) => `With these scores, of the last ${n} scored reels: ${l} get a like (${p}%), and ${s} are checked in depth.`,
+  profileSub: 'This text goes to the scorer word for word in every session. Write what interests you and what you want less of, in any language. Your verdicts on the ideas it sent are added as examples, and they outweigh this text.',
+  profileLbl: 'Your interests', saveProfile: 'Save interests', unsaved: 'There are unsaved changes.',
+  ideasSub: (seen, sent, liked, rej) => `Of ${seen} reels seen so far, ${sent} were sent. You liked ${liked}${rej ? ' and rejected ' + rej : ''}. Your verdict is read from your heart on the message in Instagram, or from the buttons here.`,
+  b810: '8 to 10', b67: '6 and 7', b35: '3 to 5', b02: '0 to 2',
+  fSent: 'Sent', fWaiting: 'No verdict yet', fChecked: 'Checked, not sent', fLiked: 'Like only', fAll: 'Everything seen',
+  aSent: 'Sent', aChecked: 'Checked, not sent', aPending: 'Waiting for its check', aLiked: 'Liked', aSkipped: 'Skipped',
+  first: 'first', noIdea: 'No description', replied: 'You replied on Instagram', yes: 'Liked it', no: 'Not for me', verdict: 'Your verdict on this idea',
+  eSent: 'Nothing sent yet. The first idea to reach the send score will show here.', eWaiting: 'You gave a verdict on everything sent. Nothing is waiting.',
+  eChecked: 'No idea was checked and dropped.', eLiked: 'No reels were liked without being sent.', eAll: 'The log is empty. Start a session to fill it.',
+  showMore: 'Show more', logSub: 'The latest lines the bot wrote. If a session stopped or Instagram asked for a login, the reason is here.',
+  logOnly: 'Discovery only', refresh: 'Refresh', logEmpty: 'The log is empty.',
+  hRunning: 'A session is running now.', hNone: 'No session has run today yet.',
+  hToday: (seen, sent) => `Today it saw ${seen} reel${seen === 1 ? '' : 's'} and ${sent ? 'sent you ' + sent + ' idea' + (sent === 1 ? '' : 's') : 'sent nothing'}.`,
+  sStopped: 'The bot is stopped, so there are no sessions and no replies until you start it.', sOff: 'Automatic discovery is off. The bot only answers your messages.',
+  sSoon: 'The next session starts within minutes.', sNext: (day, time) => `Next session ${day} at about ${time}.`,
+  today: 'today', tomorrow: 'tomorrow', yesterday: 'yesterday', locale: 'en-GB',
+  pLogin: 'Instagram logged the bot account out.', pLoginDo: 'Open a terminal in the bot folder, run python botctl.py login, and log in in the window.',
+  pCheck: 'Instagram wants the account owner to confirm something.', pCheckDo: 'Stop the bot here, run python botctl.py open, and answer the warning yourself.',
+  pFail: 'The last session stopped before it finished.', pFailDo: 'The next session finishes what is left. The reason:',
+  cRunning: 'Session running', cStopped: 'Bot stopped', cOn: 'Bot running', cReplies: 'Replies only',
+  pgStart: 'The session has started', pgAuto: 'A session is running; the bot started it by itself.',
+  pgRun: m => `Running for ${m} minute${m === 1 ? '' : 's'}. Skimming first, then scoring, then the deep checks.`,
+  pgDone: 'The session finished.', pgFail: 'The session stopped. The reason is in the last lines.', tDone: 'The session finished', tFail: 'The session stopped before it finished',
+  confirmStop: 'Stopping the bot stops the replies to your messages and the sessions, and cuts off any reply or session running now. Stop it?',
+  tBotOn: 'The bot is starting; it needs half a minute to open its browser', tBotOff: 'The bot is stopped',
+  tDiscOn: 'Automatic discovery is on', tDiscOff: 'Automatic discovery is off; replies carry on',
+  tSess: 'Sessions saved, and the next session was rescheduled', tScores: 'Scores saved; they apply from the next session', tProfile: 'Interests saved; they apply from the next session',
+  tYes: 'Counted: ideas like this will score higher', tNo: 'Counted: ideas like this will score lower', tClear: 'Verdict removed',
+  loadFail: 'The dashboard could not read the bot\'s state.', reqFail: 'The request failed',
+  err: { reels_range: 'The number of reels must be between 5 and 100', session_running: 'A session is already running; wait for it to finish', windows_only: 'Starting and stopping the bot from here works on Windows only',
+    bad_enabled: 'The on/off value was not understood', bad_rate: 'Sessions a day must be between 0.5 and 12', bad_reels: 'Reels per session must be between 5 and 100, with the smaller number first',
+    bad_scores: 'Scores run from 1 to 10, and the like score cannot be above the send score', short_profile: 'The description is too short for the scorer to choose by',
+    bad_quotes: 'Remove the three single quotes in a row from the text', config_unreadable: 'The settings could not be read back after saving; the old file was restored', bad_feedback: 'Unknown verdict', unknown_reel: 'That reel is not in the log', forbidden: 'The request was refused' },
+},
+};
+let L = T.ar;
+function arCount(n, one, two, few, many) { return n === 1 ? one : n === 2 ? two : n >= 3 && n <= 10 ? n + ' ' + few : n + ' ' + many; }
+
+function setLang(l) {
+  lang = l; L = T[l];
+  document.documentElement.lang = l; document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+  document.title = L.title;
+  document.querySelectorAll('[data-t]').forEach(e => { e.textContent = L[e.dataset.t]; });
+  document.querySelectorAll('[data-ta]').forEach(e => e.setAttribute('aria-label', L[e.dataset.ta]));
+  $('langBtn').textContent = L.other; $('runReels').placeholder = L.random;
+  $('nav').setAttribute('aria-label', L.title); $('logBox').setAttribute('aria-label', L.navLog);
+  $('chips').setAttribute('aria-label', L.navIdeas); $('dist').setAttribute('aria-label', L.navScoring);
+  if (S) { render(); loadLog(); }
+}
+$('langBtn').onclick = () => { const l = lang === 'ar' ? 'en' : 'ar'; stored = l; try { localStorage.setItem('lang', l); } catch (e) {} setLang(l); };
+
 const fmtTime = d => d.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'});
-const fmtDay = d => d.toLocaleDateString('ar-IQ-u-nu-latn', {weekday: 'long', day: 'numeric', month: 'long'});
 function relDay(d) {
   const n = new Date();
   const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5);
-  return days === 0 ? 'اليوم' : days === 1 ? 'باچر' : days === -1 ? 'أمس' : fmtDay(d);
+  return days === 0 ? L.today : days === 1 ? L.tomorrow : days === -1 ? L.yesterday : d.toLocaleDateString(L.locale, {weekday: 'long', day: 'numeric', month: 'long'});
 }
 const stampDate = id => { const m = /^(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)/.exec(id || ''); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : null; };
 const num = v => v == null ? '' : String(+(+v).toFixed(1));
-const count = (n, one, two, few, many) => n === 1 ? one : n === 2 ? two : n >= 3 && n <= 10 ? n + ' ' + few : n + ' ' + many;
 
 function toast(msg, bad) {
   const t = document.createElement('div');
@@ -338,7 +458,7 @@ async function api(path, body) {
     {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   let data = {};
   try { data = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(data.error || ('الطلب فشل (' + r.status + ')'));
+  if (!r.ok) throw new Error(L.err[data.error] || data.error || (L.reqFail + ' (' + r.status + ')'));
   return data;
 }
 async function busy(btn, fn) {
@@ -347,52 +467,43 @@ async function busy(btn, fn) {
   btn.disabled = false;
 }
 
-const ACTIONS = {sent: 'انرسلت', checked: 'انفحصت وما انرسلت', pending: 'تنتظر الفحص', liked: 'لايك', skipped: 'انعبرت', ad: 'إعلان'};
+const ACTIONS = {sent: 'aSent', checked: 'aChecked', pending: 'aPending', liked: 'aLiked', skipped: 'aSkipped'};
 const FILTERS = [
-  ['sent', 'انرسلت', r => r.action === 'sent'],
-  ['waiting', 'بلا رأي منك', r => r.action === 'sent' && !r.feedback],
-  ['checked', 'انفحصت وما انرسلت', r => r.action === 'checked' || r.action === 'pending'],
-  ['liked', 'لايك بس', r => r.action === 'liked'],
-  ['all', 'كل ما شافه', r => true],
+  ['sent', 'fSent', r => r.action === 'sent'],
+  ['waiting', 'fWaiting', r => r.action === 'sent' && !r.feedback],
+  ['checked', 'fChecked', r => r.action === 'checked' || r.action === 'pending'],
+  ['liked', 'fLiked', r => r.action === 'liked'],
+  ['all', 'fAll', r => true],
 ];
 
 function render() {
   const b = S.bot, st = S.settings, t = S.today, ses = S.session;
   const on = b.mode === 'live' ? b.alive : b.task.exists && b.task.state !== 'Disabled';
   // headline: one sentence that says where today stands
-  let head;
-  if (ses.running) head = 'جلسة شغالة هسه.';
-  else if (!t.sessions) head = 'اليوم بعد ما صارت ولا جلسة.';
-  else head = 'اليوم شاف ' + count(t.seen, 'ريل واحد', 'ريلين', 'ريلز', 'ريل') + ' و' +
-    (t.sent ? 'دزلك ' + count(t.sent, 'فكرة وحدة', 'فكرتين', 'أفكار', 'فكرة') : 'ما دز شي') + '.';
+  const head = ses.running ? L.hRunning : !t.sessions ? L.hNone : L.hToday(t.seen, t.sent);
   let sub = '';
-  if (!on) sub = 'البوت موقوف، ف ماكو جلسات ولا ردود لحد ما تشغله.';
-  else if (!st.enabled) sub = 'الاكتشاف التلقائي مطفي. البوت يرد على رسايلك بس.';
-  else if (ses.next_at && !ses.running) { const d = new Date(ses.next_at * 1000);
-    sub = d < new Date() ? 'الجلسة الجاية خلال دقايق.' : 'الجلسة الجاية ' + relDay(d) + ' حوالي الساعة ' + fmtTime(d) + '.'; }
+  if (!on) sub = L.sStopped;
+  else if (!st.enabled) sub = L.sOff;
+  else if (ses.next_at && !ses.running) { const d = new Date(ses.next_at * 1000); sub = d < new Date() ? L.sSoon : L.sNext(relDay(d), fmtTime(d)); }
   $('headline').textContent = head; $('subline').textContent = sub;
 
   const al = $('alert');
   if (b.problem) {
-    const login = /logged/.test(b.problem), check = /warning or check/.test(b.problem);
+    const k = /logged/.test(b.problem) ? 'pLogin' : /warning or check/.test(b.problem) ? 'pCheck' : 'pFail';
     al.hidden = false;
-    al.innerHTML = '<b>' + (login ? 'انستا طلّع حساب البوت' : check ? 'انستا يطلب تأكيد من صاحب الحساب' : 'آخر جلسة وگفت قبل ما تكمل') + '</b> ' +
-      (login ? 'افتح الطرفية بفولدر البوت وشغّل python botctl.py login وسجل دخول بالنافذة.' :
-       check ? 'وگف البوت من هنا، شغّل python botctl.py open، وجاوب على التحذير بنفسك.' : 'الجلسة الجاية تكمل اللي بقى. السبب:') +
-      '<code>' + esc(b.problem) + '</code>';
+    al.innerHTML = '<b>' + L[k] + '</b> ' + L[k + 'Do'] + '<code>' + esc(b.problem) + '</code>';
   } else al.hidden = true;
 
-  const dot = $('chip').querySelector('.dot');
-  dot.className = 'dot ' + (ses.running ? 'busy' : on ? 'on' : 'off');
-  $('chipText').textContent = ses.running ? 'جلسة شغالة' : !on ? 'البوت موقوف' : st.enabled ? 'البوت شغال' : 'ردود بس';
+  $('chip').querySelector('.dot').className = 'dot ' + (ses.running ? 'busy' : on ? 'on' : 'off');
+  $('chipText').textContent = ses.running ? L.cRunning : !on ? L.cStopped : st.enabled ? L.cOn : L.cReplies;
   $('runTop').disabled = $('runBtn').disabled = ses.running || !on;
-  $('botOn').checked = on; $('botLbl').textContent = on ? 'البوت شغال' : 'البوت موقوف';
+  $('botOn').checked = on; $('botLbl').textContent = on ? L.botOn : L.botOff;
   $('botOn').disabled = !b.task.exists;
 
   $('runs').innerHTML = S.sessions.length ? S.sessions.map(r => { const d = stampDate(r.id);
     return '<tr><td>' + (d ? esc(relDay(d)) + ' <span class="ltr">' + fmtTime(d) + '</span>' : esc(r.id)) + '</td><td class="num">' + r.seen +
       '</td><td class="num">' + r.liked + '</td><td class="num">' + r.sent + '</td></tr>'; }).join('')
-    : '<tr><td colspan="4" class="empty">ماكو جلسات مسجلة بعد. ابدي وحدة من الزر فوگ.</td></tr>';
+    : '<tr><td colspan="4" class="empty">' + L.noSessions + '</td></tr>';
 
   if (!loaded) {
     V.spd = st.sessions_per_day; V.like = st.like_score; V.send = st.send_score;
@@ -400,17 +511,15 @@ function render() {
     $('taste').value = st.profile; loaded = true;
   }
   $('discOn').checked = st.enabled;
-  $('sessInfo').textContent = 'المحفوظ هسه: ' + num(st.sessions_per_day) + ' جلسات باليوم تقريباً، وكل جلسة بين ' + st.reels[0] + ' و ' + st.reels[1] +
-    ' ريل. يعني حوالي ' + Math.round(st.sessions_per_day * (st.reels[0] + st.reels[1]) / 2) + ' ريل باليوم إذا الجهاز مفتوح طول اليوم.';
-  $('tasteState').textContent = $('taste').value.trim() === st.profile.trim() ? '' : 'أكو تعديل ما انحفظ بعد.';
+  $('sessInfo').textContent = L.sessInfo(num(st.sessions_per_day), st.reels[0], st.reels[1], Math.round(st.sessions_per_day * (st.reels[0] + st.reels[1]) / 2));
+  $('tasteState').textContent = $('taste').value.trim() === st.profile.trim() ? '' : L.unsaved;
   steppers();
 
   const tot = S.totals, max = Math.max(1, ...Object.values(tot.buckets));
-  $('ideasSub').textContent = 'من ' + tot.seen + ' ريل شافه لحد هسه، انرسلت ' + tot.sent + '. عجبتك ' + tot.liked_by_him +
-    (tot.rejected ? ' ورفضت ' + tot.rejected : '') + '. رأيك ينقرا من قلبك على الرسالة بالانستا، أو من الأزرار هنا.';
-  $('dist').innerHTML = [['8-10', '8 إلى 10'], ['6-7', '6 و 7'], ['3-5', '3 إلى 5'], ['0-2', '0 إلى 2']].map(([k, l]) => { const c = tot.buckets[k] || 0;
-    return '<span>' + l + '</span><span class="bar"><i style="width:' + (100 * c / max) + '%"></i></span><span class="n">' + c + '</span>'; }).join('');
-  $('chips').innerHTML = FILTERS.map(([k, l, f]) => '<button class="chip" data-f="' + k + '" aria-pressed="' + (filter === k) + '">' + l +
+  $('ideasSub').textContent = L.ideasSub(tot.seen, tot.sent, tot.liked_by_him, tot.rejected);
+  $('dist').innerHTML = [['8-10', 'b810'], ['6-7', 'b67'], ['3-5', 'b35'], ['0-2', 'b02']].map(([k, l]) => { const c = tot.buckets[k] || 0;
+    return '<span>' + L[l] + '</span><span class="bar"><i style="width:' + (100 * c / max) + '%"></i></span><span class="n">' + c + '</span>'; }).join('');
+  $('chips').innerHTML = FILTERS.map(([k, l, f]) => '<button class="chip" data-f="' + k + '" aria-pressed="' + (filter === k) + '">' + L[l] +
     '<small>' + S.rows.filter(f).length + '</small></button>').join('');
   renderIdeas();
 }
@@ -418,9 +527,8 @@ function render() {
 function steppers() {
   $('spd').textContent = num(V.spd); $('like').textContent = V.like; $('send').textContent = V.send;
   $('track').innerHTML = Array.from({length: 10}, (_, i) => '<i class="' + (i + 1 >= V.send ? 'send' : i + 1 >= V.like ? 'like' : '') + '"></i>').join('');
-  if (S) { const rows = S.rows.filter(r => r.score != null), n = rows.length || 1;
-    $('scoreInfo').textContent = rows.length ? 'بهذي الدرجات، من آخر ' + rows.length + ' ريل متقيم: ' + rows.filter(r => r.score >= V.like).length +
-      ' ياخذ لايك (' + Math.round(100 * rows.filter(r => r.score >= V.like).length / n) + '%)، و ' + rows.filter(r => r.score >= V.send).length + ' ينفحص بعمق.' : ''; }
+  if (S) { const rows = S.rows.filter(r => r.score != null), n = rows.length, l = rows.filter(r => r.score >= V.like).length;
+    $('scoreInfo').textContent = n ? L.scoreInfo(n, l, Math.round(100 * l / n), rows.filter(r => r.score >= V.send).length) : ''; }
 }
 
 function renderIdeas() {
@@ -428,30 +536,32 @@ function renderIdeas() {
   $('ideaList').innerHTML = rows.length ? rows.slice(0, shown).map(r => {
     const d = r.at ? new Date(r.at) : null, liked = r.feedback === 'liked' || r.feedback === 'replied';
     return '<li><div class="score' + (r.score < 6 ? ' low' : '') + '">' + num(r.final ?? r.score) +
-      (r.final != null && r.final !== r.score ? '<small>أول ' + num(r.score) + '</small>' : '') + '</div>' +
-      '<div><div class="idea">' + esc(r.idea || 'بدون وصف') + '</div><div class="why">' + esc(r.why) + '</div>' +
-      '<div class="meta"><span class="tag' + (r.action === 'sent' ? ' sent' : '') + '">' + (ACTIONS[r.action] || esc(r.action)) + '</span>' +
+      (r.final != null && r.final !== r.score ? '<small>' + L.first + ' ' + num(r.score) + '</small>' : '') + '</div>' +
+      '<div><div class="idea">' + esc(r.idea || L.noIdea) + '</div><div class="why">' + esc(r.why) + '</div>' +
+      '<div class="meta"><span class="tag' + (r.action === 'sent' ? ' sent' : '') + '">' + (L[ACTIONS[r.action]] || esc(r.action)) + '</span>' +
       '<a class="ltr" href="https://www.instagram.com/reel/' + esc(r.code) + '/" target="_blank" rel="noopener">@' + esc(r.account || '?') + '</a>' +
       (d ? '<span>' + esc(relDay(d)) + ' <span class="ltr">' + fmtTime(d) + '</span></span>' : '') +
-      (r.feedback === 'replied' ? '<span>رديت عليها بالانستا</span>' : '') + '</div></div>' +
-      (r.action === 'sent' ? '<div class="vote" role="group" aria-label="رأيك بهذي الفكرة">' +
-        '<button class="yes" data-code="' + esc(r.code) + '" data-v="liked" aria-pressed="' + liked + '">عجبتني</button>' +
-        '<button class="no" data-code="' + esc(r.code) + '" data-v="disliked" aria-pressed="' + (r.feedback === 'disliked') + '">ما عجبتني</button></div>' : '<span></span>') + '</li>';
-  }).join('') : '<li class="empty">' + ({sent: 'ما انرسل شي بعد. أول فكرة تعدي درجة الإرسال تظهر هنا.', waiting: 'عطيت رأيك بكل اللي انرسل. ماكو شي ينتظرك.',
-    checked: 'ماكو فكرة انفحصت وطاحت.', liked: 'ماكو ريلز أخذت لايك بدون إرسال.', all: 'السجل فارغ. ابدي جلسة حتى ينملي.'}[filter]) + '</li>';
+      (r.feedback === 'replied' ? '<span>' + L.replied + '</span>' : '') + '</div></div>' +
+      (r.action === 'sent' ? '<div class="vote" role="group" aria-label="' + L.verdict + '">' +
+        '<button class="yes" data-code="' + esc(r.code) + '" data-v="liked" aria-pressed="' + liked + '">' + L.yes + '</button>' +
+        '<button class="no" data-code="' + esc(r.code) + '" data-v="disliked" aria-pressed="' + (r.feedback === 'disliked') + '">' + L.no + '</button></div>' : '<span></span>') + '</li>';
+  }).join('') : '<li class="empty">' + L[{sent: 'eSent', waiting: 'eWaiting', checked: 'eChecked', liked: 'eLiked', all: 'eAll'}[filter]] + '</li>';
   $('moreBtn').hidden = rows.length <= shown;
 }
 
 async function load() {
-  try { S = await api('/api/state'); render(); if (S.session.running) watch(); }
-  catch (e) { $('headline').textContent = 'اللوحة ما گدرت تقرا حالة البوت.'; $('subline').textContent = e.message; }
+  try {
+    const s = await api('/api/state');
+    S = s;
+    if (!stored && !loaded && (s.lang === 'ar' ? 'ar' : 'en') !== lang) setLang(s.lang === 'ar' ? 'ar' : 'en'); else render(); if (S.session.running) watch();
+  } catch (e) { $('headline').textContent = L.loadFail; $('subline').textContent = e.message; }
 }
 const colour = l => /error|stopped|logged out|warning or check|failed/.test(l) ? '<span class="e">' + esc(l) + '</span>' :
   /skimmed|his reaction|SENT/.test(l) ? '<span class="g">' + esc(l) + '</span>' : esc(l);
 async function loadLog() {
   try {
     const d = await api('/api/log' + ($('logDisc').checked ? '?discover=1' : ''));
-    $('logBox').innerHTML = d.lines.length ? d.lines.map(colour).join('\n') : 'السجل فارغ.';
+    $('logBox').innerHTML = d.lines.length ? d.lines.map(colour).join('\n') : L.logEmpty;
     $('logBox').scrollTop = $('logBox').scrollHeight;
   } catch (e) { $('logBox').textContent = e.message; }
 }
@@ -460,20 +570,20 @@ function watch() {
   if (polling) return;
   const began = Date.now();
   $('progress').hidden = false; $('progDot').className = 'dot busy';
-  if (!$('progText').textContent) $('progText').textContent = 'جلسة شغالة، بداها البوت لحاله.';
+  if (!$('progText').textContent) $('progText').textContent = L.pgAuto;
   polling = setInterval(async () => {
     try {
       const s = await api('/api/state'), d = await api('/api/log?discover=1');
       const from = d.lines.map(l => /session of \d+ reels|finishing the check/.test(l)).lastIndexOf(true);
       $('progLog').innerHTML = d.lines.slice(Math.max(0, from)).map(colour).join('\n');
       $('progLog').scrollTop = $('progLog').scrollHeight;
-      if (s.session.running) $('progText').textContent = 'شغالة، مضى ' + Math.max(1, Math.round((Date.now() - began) / 60000)) + ' دقيقة. التقليب أول، بعدها التقييم، بعدها الفحص العميق.';
+      if (s.session.running) $('progText').textContent = L.pgRun(Math.max(1, Math.round((Date.now() - began) / 60000)));
       else {
         clearInterval(polling); polling = null;
-        const last = d.lines[d.lines.length - 2] || '', ok = !/stopped|error/.test(last + (d.lines[d.lines.length - 1] || ''));
+        const ok = !/stopped|error/.test(d.lines.slice(-2).join(' '));
         $('progDot').className = 'dot ' + (ok ? 'on' : 'off');
-        $('progText').textContent = ok ? 'خلصت الجلسة.' : 'الجلسة وگفت. السبب بآخر السطور.';
-        toast(ok ? 'خلصت الجلسة' : 'الجلسة وگفت قبل ما تكمل', !ok);
+        $('progText').textContent = ok ? L.pgDone : L.pgFail;
+        toast(ok ? L.tDone : L.tFail, !ok);
         S = s; render(); loadLog();
       }
     } catch (e) {}
@@ -484,7 +594,7 @@ async function startRun(btn) {
   await busy(btn, async () => {
     const n = $('runReels').value.trim();
     await api('/api/session', {reels: n ? +n : null});
-    $('progText').textContent = 'بدت الجلسة'; $('progLog').textContent = '';
+    $('progText').textContent = L.pgStart; $('progLog').textContent = '';
     location.hash = '#run'; S.session.running = true; render(); watch();
   });
 }
@@ -493,9 +603,9 @@ $('runTop').onclick = e => startRun(e.currentTarget);
 
 $('botOn').onchange = async e => {
   const on = e.target.checked;
-  if (!on && !confirm('إيقاف البوت يوگف الردود على رسايلك والجلسات، ويقطع أي رد أو جلسة شغالة هسه. توگفه؟')) { e.target.checked = true; return; }
+  if (!on && !confirm(L.confirmStop)) { e.target.checked = true; return; }
   e.target.disabled = true;
-  try { await api('/api/bot', {on}); toast(on ? 'البوت اشتغل، يحتاج نص دقيقة حتى يفتح المتصفح' : 'البوت انوگف'); }
+  try { await api('/api/bot', {on}); toast(on ? L.tBotOn : L.tBotOff); }
   catch (err) { toast(err.message, true); }
   setTimeout(load, on ? 12000 : 1500); e.target.disabled = false;
 };
@@ -503,11 +613,11 @@ $('botOn').onchange = async e => {
 async function save(btn, body, msg) {
   await busy(btn, async () => { await api('/api/settings', body); toast(msg); await load(); });
 }
-$('discOn').onchange = e => save(e.target, {enabled: e.target.checked}, e.target.checked ? 'الاكتشاف التلقائي اشتغل' : 'الاكتشاف التلقائي انطفى، والردود باقية');
-$('sessSave').onclick = e => save(e.currentTarget, {sessions_per_day: V.spd, reels: [+$('reelsMin').value, +$('reelsMax').value]}, 'انحفظت الجلسات، وتغيّر موعد الجلسة الجاية');
-$('scoreSave').onclick = e => save(e.currentTarget, {like_score: V.like, send_score: V.send}, 'انحفظت الدرجات، وتطبق من الجلسة الجاية');
-$('tasteSave').onclick = e => save(e.currentTarget, {profile: $('taste').value}, 'انحفظت الاهتمامات، وتطبق من الجلسة الجاية');
-$('taste').oninput = () => { if (S) $('tasteState').textContent = $('taste').value.trim() === S.settings.profile.trim() ? '' : 'أكو تعديل ما انحفظ بعد.'; };
+$('discOn').onchange = e => save(e.target, {enabled: e.target.checked}, e.target.checked ? L.tDiscOn : L.tDiscOff);
+$('sessSave').onclick = e => save(e.currentTarget, {sessions_per_day: V.spd, reels: [+$('reelsMin').value, +$('reelsMax').value]}, L.tSess);
+$('scoreSave').onclick = e => save(e.currentTarget, {like_score: V.like, send_score: V.send}, L.tScores);
+$('tasteSave').onclick = e => save(e.currentTarget, {profile: $('taste').value}, L.tProfile);
+$('taste').oninput = () => { if (S) $('tasteState').textContent = $('taste').value.trim() === S.settings.profile.trim() ? '' : L.unsaved; };
 
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-step]'); if (!b) return;
@@ -530,7 +640,7 @@ $('ideaList').onclick = async e => {
   const row = S.rows.find(r => r.code === b.dataset.code);
   const was = row.feedback === 'replied' ? 'liked' : row.feedback, next = was === b.dataset.v ? null : b.dataset.v;
   try { await api('/api/feedback', {code: row.code, feedback: next}); row.feedback = next;
-    toast(next === 'liked' ? 'انحسبت: فكرة مثل هاي تاخذ درجة أعلى' : next === 'disliked' ? 'انحسبت: فكرة مثل هاي تاخذ درجة أقل' : 'انشال رأيك');
+    toast(next === 'liked' ? L.tYes : next === 'disliked' ? L.tNo : L.tClear);
     S.totals.liked_by_him = S.rows.filter(r => r.action === 'sent' && (r.feedback === 'liked' || r.feedback === 'replied')).length;
     S.totals.rejected = S.rows.filter(r => r.action === 'sent' && r.feedback === 'disliked').length; render(); }
   catch (err) { toast(err.message, true); }
@@ -544,7 +654,8 @@ const spy = new IntersectionObserver(es => es.forEach(en => {
 }), {rootMargin: '-30% 0px -60% 0px'});
 document.querySelectorAll('main section').forEach(s => spy.observe(s));
 
-load(); loadLog();
+setLang(stored === 'en' ? 'en' : 'ar');
+load().then(loadLog);
 setInterval(() => { if (!polling && document.visibilityState === 'visible') load(); }, 30000);
 </script>
 </body>

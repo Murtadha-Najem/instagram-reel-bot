@@ -1,6 +1,9 @@
 # instagram-reel-bot
 
-Share a reel with a second Instagram account and get the answer back in the same chat.
+A second Instagram account that works for you, in two directions:
+
+- **You send it a reel, it answers.** Share a post with the bot account and get the answer back in the same chat.
+- **It finds reels for you (optional).** The bot skims its own Reels tab, scores the idea in each reel against what you care about, and sends you only the ones worth your time, already researched. See [Discovery](#discovery).
 
 You send the bot account a reel, a photo post or a question from your usual account, the way you would send it to a friend. A few minutes later the bot replies in the chat, as a reply to your message: what the post is, what is said and shown, whether the claim holds up, or the answer to the exact question you asked with it. Everything it watched is kept on your computer as a searchable record, so you can ask about a post weeks later without opening Instagram again.
 
@@ -77,9 +80,50 @@ Prefer a terminal to a scheduler? `python botctl.py start` runs the bot in the f
 - **Ask with the post.** Anything you type within 3 minutes after sending a post is read as your question about it, however many messages you send in between, as long as it arrives before the bot starts answering (usually a minute or two). A question sent later gets its own reply, from the record of that post. A message sent before the post does not belong to it (except a few seconds, because Instagram sometimes delivers the text first).
 - **Follow up.** Use Instagram's reply on one of the bot's answers, or just write a question: the agent finds the earlier post in the records.
 - **Take it to Claude.** Write "start a conversation about this reel" (in any wording or language) and the bot does not discuss it in Instagram: it opens a Claude conversation named after the post, with an opening message that sums up what the research found and where the discussion could go, and moves it into the Claude desktop app's sidebar. You get a one-line Instagram reply with its title and continue on your computer. This uses `claude --desktop`, so it needs the Claude desktop app, a Claude subscription login, and Claude Code 2.1.285 or later; without the app the conversation is still saved and can be opened with `/resume`.
-- **Let it find reels for you (optional, experimental).** With `[discover] enabled = true` the bot also skims its own Reels tab in sessions of 30 to 50 reels, a few times a day at random moments. It reads only what the page loads by itself, scores the idea in every reel out of 10 against the profile you wrote (interest, substance, freshness; the reel's quality and its creator's "comment X for the link" tricks do not count), likes the ones at `like_score` or more so the feed learns, and puts the ones at `send_score` or more through the full pipeline and research. Those are scored again and sent to you only if the idea still holds, with a short note on what the real thing behind it is, even when the reel withheld or garbled it. There is no quota: a session may send several or none. Every reel it saw is listed in `data/discover/log.md` with its score, the reason, and what was done. **Your reactions are its feedback:** a heart (or any friendly emoji) on a reel it sent, or a reply to it, marks the idea as liked; a thumbs-down marks it as rejected; no reaction counts for nothing. The scoring reads those as examples in every later session, the log shows them, and a liked reel is also saved on the bot account, the strongest signal it can give the feed. Before turning it on, open the bot account in the Instagram app and add your topics under Your Algorithm. The web Reels tab has no "not interested" button, so the only signals the bot gives are a like and moving on. This is the riskiest thing the bot does: see Risks.
-- **The dashboard.** `python dashboard/server.py` (or `dashboard/dashboard.cmd` on Windows) opens a local page at http://localhost:8798, in Arabic: what the bot saw and sent today, every idea with its score and reason, your verdict on each one (two buttons, the same feedback as a heart in the chat), a button to start a session now, the session rate and size, the two score thresholds, the profile text, a switch for discovery and one for the whole bot, and the log. It listens on this computer only.
 - **The archive.** Every post gets a Markdown record in `data/records/`: summary, what the research found (with links), speech, on-screen text, a `Names` line (people, accounts, tools, libraries, repos, sites, songs) and what you asked with the bot's answer. The raw material (video, frames, full transcript, Instagram's metadata) stays in `data/cache/`. Point any agent or a plain search at `data/records/` to find a post again.
+
+## Discovery
+
+Off by default. Turned on, the bot stops waiting for you to send reels and goes looking.
+
+**What a session does**
+
+1. **Skim.** It opens the Reels tab of the bot account and moves through 30 to 50 reels the way a person skims them. It makes no request of its own: the account, caption, numbers and cover of each reel come from what the page loads by itself.
+2. **Score the idea.** One agent call scores every reel out of 10: interest (0 to 4), how real and specific the idea is (0 to 3), and freshness (0 to 3, checked against the records of what you already saw). It is the idea that is scored, never the reel: a creator who says "comment X and I'll send it", hides the answer, or gets a detail wrong loses nothing if the idea behind the reel is good.
+3. **Like.** Reels at `like_score` or more get a like. On the web that is the only signal Instagram accepts (there is no "not interested" button there), and it is how the feed learns what to bring next.
+4. **Check and send.** Reels at `send_score` or more go through the full pipeline and research: the bot finds the real thing behind the idea (the repo, the tool, the paper), scores it again on what it found, and sends it only if it still passes, as one short message that gives you the idea and the real name, followed by the reel's link. There is no quota: a session may send several or none.
+5. **Log.** Every reel it saw is written to `data/discover/log.md` (and `log.jsonl`): the idea, the score, the reason, and what was done. Deep-checked reels also get a normal record in the archive.
+
+Sessions have no fixed times. You set an average number a day and the bot picks each moment at random; a session cut short (the computer went to sleep) is finished by the next one.
+
+**Your reactions are the feedback**
+
+- A heart, or any friendly emoji, on a reel it sent: you liked the idea.
+- A reply to that message: you liked it, strongly.
+- A thumbs-down, or another unfriendly emoji: rejected.
+- No reaction counts for nothing (you may simply not have seen it yet).
+
+Reactions arrive with the chat the bot already reads, so they cost no extra request. Every later session gets them as examples that outweigh the written profile, and a reel you liked is also saved on the bot account, the strongest signal it can give the feed.
+
+**Setting it up**
+
+1. Log in to the bot account in the Instagram app on your phone, with the app language set to English, open the Reels tab, tap the icon at the top right (two lines with hearts) and add your topics under **Your Algorithm**, both what you want more of and what you want less of. Without this the account's feed is the generic one for your region. Skim a little yourself and like a few good reels: behaviour teaches the feed faster than the topic list.
+2. In `config.toml`, write a `[discover]` section (see `config.example.toml`): `enabled = true` and a `profile` of a few lines saying what you care about and what you want less of.
+3. Restart the bot (`python botctl.py schedule install`, or stop and start it from the dashboard). The first session starts within 40 minutes. `python botctl.py discover --reels 12` runs a small one at once.
+
+**The dashboard**
+
+`python dashboard/server.py` (on Windows, `dashboard/dashboard.cmd`) opens a local page at http://localhost:8798, in English or Arabic:
+
+- today at a glance, the next session, and a warning when Instagram logged the bot out or wants a check;
+- a button to start a session now, with its log as it runs;
+- a switch for discovery and one for the whole bot (Windows);
+- sessions a day, reels per session, and the two score thresholds, with how many of the reels seen so far each setting would have caught;
+- the profile text;
+- every idea with its score, reason and link, and two buttons for your verdict, which count like a reaction in the chat and outrank it;
+- the bot's log.
+
+It listens on this computer only and refuses requests that do not come from its own page.
 
 ## Configuration
 
@@ -115,6 +159,8 @@ python botctl.py start                       # the bot in the foreground, in the
 python botctl.py schedule install | remove   # start it automatically, or stop that
 python botctl.py live [--dry-run]            # live mode directly; --dry-run notices messages but answers nothing
 python botctl.py check [--now | --dry-run]   # one check
+python botctl.py discover [--reels N]        # one discovery session now
+python dashboard/server.py                   # the dashboard, at http://localhost:8798
 python botctl.py fetch
 python botctl.py send "<text>" [--reply-to <item_id>]
 python botctl.py done <item_id>...
@@ -126,6 +172,7 @@ python look.py <shortcode> sheet --start S --end E --n N | frame SECONDS
 
 - The check costs nothing. Agent sessions start only when there is something to answer: one session per turn.
 - With a Claude or ChatGPT subscription, sessions count against your plan's usage limits; with an API key they are billed as usual. Agent sessions start with only the tools they need (no MCP servers, no skills) to keep that small.
+- A discovery session costs one agent session for the scoring, plus one full session (pipeline and research) for each reel that reaches the send score. Raise `send_score` or lower `sessions_per_day` if that is too much for your plan.
 - Gemini's free tier allows a limited number of transcriptions a day per key. Many posts skip it anyway: music-only reels and videos whose captions already carry the speech.
 
 ## Risks and privacy
@@ -147,7 +194,7 @@ python look.py <shortcode> sheet --start S --end E --n N | frame SECONDS
 
 ## Status
 
-Built and used daily on Windows 11 with Claude Code and Microsoft Edge, in live mode started by the Task Scheduler. The macOS (launchd) and Linux (systemd) schedulers and the Codex agent option are written but not yet tested; reports and fixes are welcome.
+Built and used daily on Windows 11 with Claude Code and Microsoft Edge, in live mode started by the Task Scheduler. Discovery, the feedback from reactions and the dashboard are newer: used daily on the same setup since October 2026, in live mode and (a single test session) without it. The macOS (launchd) and Linux (systemd) schedulers and the Codex agent option are written but not yet tested; reports and fixes are welcome.
 
 ## Credits
 
@@ -163,6 +210,7 @@ The reel pipeline comes from [claude-reel](https://github.com/Murtadha-Najem/cla
 - تختار الطريقة: متصفح مخفي يبقى مفتوح وينتبه للرسالة خلال ثواني، أو فحص كل كم دقيقة انت تحددها. الفحص ما يصرف شي، والوكيل ما يشتغل إلا من توصل رسالة جديدة.
 - أي نص ترسله خلال 3 دقايق بعد الريل يعتبر سؤال عنه، إذا وصل قبل ما يبدي الجواب.
 - يرد بس على حسابك انت، ويتجاهل أي حساب ثاني.
+- **الاكتشاف (اختياري):** البوت يقلب الريلز بحسابه بجلسات عشوائية، يقيّم فكرة كل ريل من 10 حسب اهتماماتك، ويدزلك بس اللي يعدي بعد ما يبحث عنه. قلبك أو 👎 على اللي دزه هو الفيدباك، وأكو لوحة تحكم محلية بالعربي والإنگليزي.
 - استعمل حساب ثانوي للبوت، مو حسابك الأساسي: أتمتة الحساب مخالفة لشروط انستا وممكن ينحظر.
 
 التثبيت والإعدادات بالأعلى. اللغة تنضبط من `config.toml`، وأكو مثال لقواعد الكتابة بالعربي داخل `config.example.toml`.
