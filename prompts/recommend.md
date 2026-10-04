@@ -11,6 +11,10 @@ Paths (always call Python by this path with absolute script paths; never `cd`):
 ## What he cares about
 {profile}
 
+## What he said about earlier finds
+His own reactions to ideas this bot sent him before. They outweigh the wording of the profile: an idea of the same kind as the ones he liked earns more interest, one of the same kind as those he rejected earns less.
+{feedback}
+
 ## Steps
 1. Read the brief, then the bundle.md in full, then open the overview sheet it names. Open more frames only when needed: `{python} "{root}/look.py" <shortcode> sheet --start S --end E --n N` or `{python} "{root}/look.py" <shortcode> frame SECONDS`. Do not invent speech the bundle does not have.
 2. Find the idea and the real thing behind it. Look for specific names (a repo, a site, a library, a tool, a paper, a method, a product) in the speech, the on-screen text, the caption and the frames, and open the real source: the repo page (stars, last commit, licence, what it actually does), the official site, the paper. When the reel withholds the name, search with what it does show until you find it. When the reel explains or claims something, check it, and keep what is true. You may read local files in the extra folders to see whether he already has the same thing. Change nothing there.

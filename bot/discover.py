@@ -10,6 +10,7 @@ A session, a few times a day at random moments:
 """
 import json
 import random
+import re
 import subprocess
 import time
 from datetime import datetime
@@ -20,6 +21,7 @@ from . import agent, browser, ig, watch
 from .config import ROOT
 
 AWAKE_HOURS = 16   # sessions_per_day is spread over a day of about this many hours
+NEGATIVE = set("\U0001F44E\U0001F621\U0001F92C\U0001F612\U0001F644\U0001F4A9\U0001F92E\u274C\U0001F634\U0001F620\U0001F971")
 
 
 def _read(path, default):
@@ -65,7 +67,7 @@ def _agent(cfg, name, log_file, timeout, **values):
         owner=cfg.owner, python=agent.python_command(), root=ROOT.as_posix(), records=cfg.records.as_posix(),
         language=cfg.language, max_chars=cfg.max_chars, rules=rules,
         profile=cfg.discover_profile or "(no profile given: judge by general interest)",
-        like_score=cfg.like_score, send_score=cfg.send_score, **values)
+        like_score=cfg.like_score, send_score=cfg.send_score, feedback=feedback_text(cfg), **values)
     prompt_file = log_file.with_suffix(".prompt.md")
     prompt_file.write_text(prompt, encoding="utf-8")
     try:
@@ -157,16 +159,59 @@ def _log(cfg, rows):
             when = stamp
         liked = sum(bool(r.get("like")) or r["action"] in ("sent", "liked", "checked", "pending") for r in rs)
         out.append(f"\n## {when} ({len(rs)} seen, {liked} liked, {sum(r['action'] == 'sent' for r in rs)} sent)\n\n"
-                   "| score | action | account | idea | why | link |\n|---|---|---|---|---|---|\n")
+                   "| score | action | his reaction | account | idea | why | link |\n|---|---|---|---|---|---|---|\n")
         for r in sorted(rs, key=lambda r: -(r.get("final_score") or r.get("score") or 0)):
             score = "" if r.get("score") is None else f"{float(r['score']):g}"
             if r.get("final_score") is not None:
                 score += f" then {float(r['final_score']):g}"   # first look, then after watching and research
-            out.append(f"| {score} | {r['action']} | @{r.get('account') or '?'} | "
+            out.append(f"| {score} | {r['action']} | {r.get('feedback') or ''} | @{r.get('account') or '?'} | "
                        f"{cell(r.get('idea') or r.get('caption'))[:90]} | "
                        f"{cell(r.get('final_reason') or r.get('reason'))[:160]} | "
                        f"[open](https://www.instagram.com/reel/{r['code']}/) |\n")
     (cfg.discovery / "log.md").write_text("".join(out), encoding="utf-8")
+
+
+def sync_feedback(cfg, thread):
+    """Read the owner's reactions to the reels the bot sent him: a heart (or any friendly emoji) is "liked",
+    a thumbs-down or another unfriendly one is "disliked", and a reply to the message is "replied". The thread
+    was already fetched by the check, so this asks Instagram for nothing."""
+    sent = {r["code"]: r for r in _rows(cfg) if r["action"] == "sent"}
+    if not sent or not thread:
+        return
+    owner, items, changed = str(thread.get("owner_id")), thread.get("items", []), []
+    replied_to = {(o.get("replied_to_message") or {}).get("item_id") for o in items if str(o.get("user_id")) == owner}
+    for it in items:
+        if str(it.get("user_id")) == owner:
+            continue
+        m = re.search(r"instagram\.com/reels?/([\w-]+)", ig.sent_text(it) or "")
+        row = sent.get(m.group(1)) if m else None
+        if not row:
+            continue
+        emojis = [(e.get("emoji") or "").replace("\ufe0f", "") for e in (it.get("reactions") or {}).get("emojis", [])
+                  if str(e.get("sender_id")) == owner]
+        fb = None
+        if emojis:
+            fb = "disliked" if emojis[-1] in NEGATIVE else "liked"
+        if it.get("item_id") in replied_to and fb != "disliked":
+            fb = "replied"
+        if fb and row.get("feedback") != fb:
+            row.update(feedback=fb, feedback_emoji=emojis[-1] if emojis else None)
+            changed.append(row)
+    if changed:
+        _log(cfg, changed)
+        watch.log(cfg, "discover: his reaction: " + ", ".join(f"{r['code']} {r['feedback']}" for r in changed))
+
+
+def feedback_text(cfg):
+    """His reactions so far, as examples for the scoring."""
+    rows = [r for r in _rows(cfg) if r.get("feedback")]
+    if not rows:
+        return "(he has not reacted to anything yet)"
+    line = lambda r: f"- {r.get('idea') or (r.get('caption') or '')[:80]} (@{r.get('account')})"
+    good = [line(r) for r in rows if r["feedback"] in ("liked", "replied")][-25:]
+    bad = [line(r) for r in rows if r["feedback"] == "disliked"][-25:]
+    return ("He liked these when they were sent to him:\n" + ("\n".join(good) or "- (none yet)")
+            + "\n\nHe rejected these:\n" + ("\n".join(bad) or "- (none yet)"))
 
 
 def _check(cfg, it):
@@ -196,6 +241,12 @@ def _session(cfg, total):
     for it in [r for r in _rows(cfg) if r["action"] == "pending"]:   # left over from a session that was cut short
         watch.log(cfg, f"discover: finishing the check of {it['code']}")
         _check(cfg, it)
+    approved = [r for r in _rows(cfg) if r.get("feedback") in ("liked", "replied") and not r.get("saved")]
+    if approved:   # what he approved gets the stronger signal on Instagram too
+        done = browser.reels(cfg, like_codes=[r["code"] for r in approved], save=True)["likes"]
+        for r in approved:
+            r["saved"] = done.get(r["code"]) or "tried"
+        _log(cfg, approved)
     stamp = f"{datetime.now():%Y%m%d_%H%M%S}"
     total = total or random.randint(*cfg.session_reels)
     watch.log(cfg, f"discover: session of {total} reels")

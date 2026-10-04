@@ -10,6 +10,10 @@ Paths:
 ## What he cares about
 {profile}
 
+## What he said about earlier finds
+His own reactions to ideas this bot sent him before. They outweigh the wording of the profile: an idea of the same kind as the ones he liked earns more interest, one of the same kind as those he rejected earns less.
+{feedback}
+
 ## The scoring (0 to 10, the sum of three parts, all about the idea)
 - **interest, 0 to 4.** How squarely the idea sits in what he cares about. 4: he would stop for it. 2: the right field but an ordinary idea. 0: not his at all. Fascinating counts as much as useful.
 - **substance, 0 to 3.** How much of a real idea there is. 3: a specific thing (a named or nameable repo, tool, paper, method, mechanism, result). 1: a general notion. 0: no idea at all (mood, motivation, a joke, a lifestyle clip). The idea does not have to be fully shown: if the reel hints at a real thing that can be found, it counts.

@@ -187,7 +187,7 @@ def _reels(ctx, body):
     if op == "scroll":
         return json.dumps(browser.reels_scroll(tab, DISCOVERY["box"], DISCOVERY["known"], int(body.get("n", 8))))
     if op == "like":
-        return browser.reels_like(tab, body["code"])
+        return browser.reels_like(tab, body["code"], bool(body.get("save")))
     return f"unknown reels step {op}"
 
 

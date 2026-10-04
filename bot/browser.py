@@ -384,27 +384,36 @@ def reels_scroll(page, box, known, n):
     return out
 
 
-def reels_like(page, code):
-    """Open one reel, like it and watch a little: the only positive signal the web Reels tab offers."""
+def reels_like(page, code, save=False):
+    """Open one reel, like it and watch a little: the only positive signal the web Reels tab offers.
+    With save, also save it: the stronger signal, kept for the reels the owner himself approved."""
     page.goto(f"{REELS}{code}/", wait_until="domcontentloaded")
     page.wait_for_timeout(random.randint(3500, 6000))
     _challenged(page)
     page.bring_to_front()
-    hits = page.evaluate(IN_VIEW, "Like")
-    if not hits:
-        return "already liked" if page.evaluate(IN_VIEW, "Unlike") else "no like button"
-    x, y = hits[0]
-    page.mouse.move(x + random.randint(-3, 3), y + random.randint(-3, 3))
-    page.wait_for_timeout(random.randint(300, 800))
-    page.mouse.down()
-    page.mouse.up()
-    page.wait_for_timeout(random.randint(1200, 2000))
-    ok = bool(page.evaluate(IN_VIEW, "Unlike"))
+    if page.evaluate(IN_VIEW, "Like"):
+        x, y = page.evaluate(IN_VIEW, "Like")[0]
+        page.mouse.move(x + random.randint(-3, 3), y + random.randint(-3, 3))
+        page.wait_for_timeout(random.randint(300, 800))
+        page.mouse.down()
+        page.mouse.up()
+        page.wait_for_timeout(random.randint(1200, 2000))
+        status = "liked" if page.evaluate(IN_VIEW, "Unlike") else "like did not register"
+    else:
+        status = "already liked" if page.evaluate(IN_VIEW, "Unlike") else "no like button"
+    if save and page.evaluate(IN_VIEW, "Save"):
+        x, y = page.evaluate(IN_VIEW, "Save")[0]
+        page.mouse.move(x + random.randint(-3, 3), y + random.randint(-3, 3))
+        page.wait_for_timeout(random.randint(300, 800))
+        page.mouse.down()
+        page.mouse.up()
+        page.wait_for_timeout(random.randint(1200, 2000))
+        status += ", saved" if page.evaluate(IN_VIEW, "Remove") else ", save did not register"
     page.wait_for_timeout(random.randint(4000, 9000))
-    return "liked" if ok else "like did not register"
+    return status
 
 
-def reels_session(cfg, total, like_codes=()):
+def reels_session(cfg, total, like_codes=(), save=False):
     """Without live mode: one visit to the profile that skims `total` reels and likes `like_codes`."""
     def run(page):
         out = {"items": [], "likes": {}}
@@ -412,17 +421,17 @@ def reels_session(cfg, total, like_codes=()):
             box, known = reels_start(page), {}
             out["items"] = reels_scroll(page, box, known, total)
         for code in like_codes:
-            out["likes"][code] = reels_like(page, code)
+            out["likes"][code] = reels_like(page, code, save)
         write_cookies(cfg, page.context)
         return out
     return session(cfg, run)
 
 
-def reels(cfg, total=0, like_codes=()):
+def reels(cfg, total=0, like_codes=(), save=False):
     """Skim `total` reels and/or like some. In live mode the open browser does it in short steps, so replies
     and new messages are not held up for the whole session."""
     if _live(cfg, "reels", {"op": "start" if total else "stop"}) is None:
-        return reels_session(cfg, total, like_codes)
+        return reels_session(cfg, total, like_codes, save)
     out = {"items": [], "likes": {}}
     try:
         if total:
@@ -433,7 +442,7 @@ def reels(cfg, total=0, like_codes=()):
                 out["items"] += [i for i in step if not any(o["code"] == i["code"] for o in out["items"])]
                 time.sleep(random.uniform(1, 4))
         for code in like_codes:
-            out["likes"][code] = _live(cfg, "reels", {"op": "like", "code": code})
+            out["likes"][code] = _live(cfg, "reels", {"op": "like", "code": code, "save": save})
             time.sleep(random.uniform(2, 8))
     finally:
         try:

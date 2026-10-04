@@ -56,6 +56,12 @@ def check(cfg, jitter=True, dry_run=False):
         return
     if t is None:
         return  # no conversation with the owner yet
+    if cfg.discover and not dry_run:
+        try:
+            from . import discover
+            discover.sync_feedback(cfg, t)
+        except Exception as e:
+            log(cfg, f"discover: reading reactions failed ({type(e).__name__}: {e})")
     if not dry_run and ig.start_here(cfg, t):
         log(cfg, "first run: existing messages marked as handled; answering from now on")
         return
