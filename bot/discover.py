@@ -194,6 +194,8 @@ def sync_feedback(cfg, thread):
             fb = "disliked" if emojis[-1] in NEGATIVE else "liked"
         if it.get("item_id") in replied_to and fb != "disliked":
             fb = "replied"
+        if row.get("feedback_from") == "dashboard" and row.get("feedback"):
+            continue  # he gave his verdict on the dashboard: that outranks an emoji left in the chat
         if fb and row.get("feedback") != fb:
             row.update(feedback=fb, feedback_emoji=emojis[-1] if emojis else None)
             changed.append(row)

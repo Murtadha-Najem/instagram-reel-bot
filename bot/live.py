@@ -15,7 +15,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import browser, discover, ig
+from . import browser, config, discover, ig
 from .config import ROOT
 from .watch import NO_WINDOW, log
 
@@ -137,7 +137,8 @@ def _run(cfg, dry_run):
                     proc, last_check, fallback = _spawn_check(cfg, dry_run), now, now
                 if now - discover_at > 60:   # a discovery session, when one is due
                     discover_at = now
-                    if (disc is None or disc.poll() is not None) and not dry_run and discover.due(cfg):
+                    if (disc is None or disc.poll() is not None) and not dry_run \
+                            and discover.due(config.load()):   # read afresh: the dashboard may have changed it
                         disc = subprocess.Popen([sys.executable, str(ROOT / "botctl.py"), "discover"], cwd=ROOT,
                                                 creationflags=NO_WINDOW, stdout=subprocess.DEVNULL)
                 while not jobs.empty():

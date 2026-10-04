@@ -30,3 +30,11 @@ SOFTWARE.
 
 Libraries used as dependencies, not copied: yt-dlp (Unlicense), RapidOCR (Apache 2.0),
 panns-inference (MIT), shazamio (MIT), google-genai (Apache 2.0).
+
+# Fonts
+
+`dashboard/fonts/` holds subsets of two typefaces, both under the SIL Open Font License 1.1
+(https://openfontlicense.org/open-font-license-official-text/):
+
+- Readex Pro, Copyright 2020 The Readex Project Authors (https://github.com/ThomasJockin/readexpro)
+- IBM Plex Mono, Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
