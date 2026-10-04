@@ -124,28 +124,56 @@ def _deep(cfg, stamp, it):
             f.unlink(missing_ok=True)
 
 
-def _log(cfg, stamp, rows):
+def _rows(cfg):
+    """The log as it stands: one row per reel, a later line for the same reel replacing the earlier one."""
+    rows = {}
+    try:
+        with (cfg.discovery / "log.jsonl").open(encoding="utf-8") as fh:
+            for ln in fh:
+                if ln.strip():
+                    r = json.loads(ln)
+                    rows[r["code"]] = r
+    except OSError:
+        pass
+    return list(rows.values())
+
+
+def _log(cfg, rows):
+    """Record rows now (a session can be cut short by the computer going to sleep), then redraw log.md."""
     with (cfg.discovery / "log.jsonl").open("a", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-    md = cfg.discovery / "log.md"
-    new = not md.exists()
-    with md.open("a", encoding="utf-8") as fh:
-        if new:
-            fh.write("# Reels seen by discovery\n\nEvery reel the bot skimmed, with its score and what was done.\n")
-        sent = sum(r["action"] == "sent" for r in rows)
-        liked = sum(r["action"] in ("sent", "liked", "checked") for r in rows)
-        fh.write(f"\n## {datetime.now():%Y-%m-%d %H:%M} ({len(rows)} seen, {liked} liked, {sent} sent)\n\n"
-                 "| score | action | account | idea | why | link |\n|---|---|---|---|---|---|\n")
-        cell = lambda s: " ".join(str(s or "").split()).replace("|", "/")
-        for r in sorted(rows, key=lambda r: -(r.get("score") or 0)):
-            score = r.get("final_score", r.get("score"))
-            score = "" if score is None else f"{float(score):g}"
+    sessions = {}
+    for r in _rows(cfg):
+        sessions.setdefault(r.get("session", ""), []).append(r)
+    cell = lambda s: " ".join(str(s or "").split()).replace("|", "/")
+    out = ["# Reels seen by discovery\n\nEvery reel the bot skimmed, newest session first: the score of its idea "
+           "and what was done.\n"]
+    for stamp in sorted(sessions, reverse=True):
+        rs = sessions[stamp]
+        try:
+            when = f"{datetime.strptime(stamp, '%Y%m%d_%H%M%S'):%Y-%m-%d %H:%M}"
+        except ValueError:
+            when = stamp
+        liked = sum(bool(r.get("like")) or r["action"] in ("sent", "liked", "checked", "pending") for r in rs)
+        out.append(f"\n## {when} ({len(rs)} seen, {liked} liked, {sum(r['action'] == 'sent' for r in rs)} sent)\n\n"
+                   "| score | action | account | idea | why | link |\n|---|---|---|---|---|---|\n")
+        for r in sorted(rs, key=lambda r: -(r.get("final_score") or r.get("score") or 0)):
+            score = "" if r.get("score") is None else f"{float(r['score']):g}"
             if r.get("final_score") is not None:
-                score = f"{float(r['score']):g} then {score}"   # first look, then after watching and research
-            fh.write(f"| {score} | {r['action']} | @{r.get('account') or '?'} | "
-                     f"{cell(r.get('idea') or r.get('caption'))[:90]} | {cell(r.get('final_reason') or r.get('reason'))[:160]} | "
-                     f"[open](https://www.instagram.com/reel/{r['code']}/) |\n")
+                score += f" then {float(r['final_score']):g}"   # first look, then after watching and research
+            out.append(f"| {score} | {r['action']} | @{r.get('account') or '?'} | "
+                       f"{cell(r.get('idea') or r.get('caption'))[:90]} | "
+                       f"{cell(r.get('final_reason') or r.get('reason'))[:160]} | "
+                       f"[open](https://www.instagram.com/reel/{r['code']}/) |\n")
+    (cfg.discovery / "log.md").write_text("".join(out), encoding="utf-8")
+
+
+def _check(cfg, it):
+    """The deep check of one reel waiting for it, recorded as soon as it is decided."""
+    v = _deep(cfg, it.get("session", "resume"), it)
+    it.update(action="sent" if v.get("sent") else "checked", final_score=v.get("score"), final_reason=v.get("reason"))
+    _log(cfg, [it])
 
 
 def session(cfg, total=None):
@@ -165,6 +193,9 @@ def session(cfg, total=None):
 
 
 def _session(cfg, total):
+    for it in [r for r in _rows(cfg) if r["action"] == "pending"]:   # left over from a session that was cut short
+        watch.log(cfg, f"discover: finishing the check of {it['code']}")
+        _check(cfg, it)
     stamp = f"{datetime.now():%Y%m%d_%H%M%S}"
     total = total or random.randint(*cfg.session_reels)
     watch.log(cfg, f"discover: session of {total} reels")
@@ -189,15 +220,17 @@ def _session(cfg, total):
         except (TypeError, ValueError):
             it["score"] = 0
         it["action"] = "liked" if it["score"] >= cfg.like_score else "skipped"
-    to_like = [it for it in fresh if it["action"] == "liked"]
+    for it in fresh:
+        if it["score"] >= cfg.send_score:
+            it["action"] = "pending"   # waiting for its deep check; a later session finishes what this one could not
+    _log(cfg, rows)
+    to_like = [it for it in fresh if it["action"] != "skipped"]
     if to_like:
         likes = browser.reels(cfg, like_codes=[it["code"] for it in to_like])["likes"]
         for it in to_like:
             it["like"] = likes.get(it["code"])
-    for it in sorted((i for i in fresh if i["score"] >= cfg.send_score), key=lambda i: -i["score"]):
-        v = _deep(cfg, stamp, it)
-        it.update(action="sent" if v.get("sent") else "checked",
-                  final_score=v.get("score"), final_reason=v.get("reason"))
-    _log(cfg, stamp, rows)
+        _log(cfg, to_like)
+    for it in sorted((i for i in fresh if i["action"] == "pending"), key=lambda i: -i["score"]):
+        _check(cfg, it)
     watch.log(cfg, f"discover: {len(items)} skimmed, {len(rows)} new, {len(to_like)} liked, "
                    f"{sum(r['action'] == 'sent' for r in rows)} sent")
