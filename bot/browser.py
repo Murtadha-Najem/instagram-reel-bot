@@ -4,11 +4,13 @@ Replies are typed into the message box of instagram.com like a person would, the
 Only one browser can open the profile at a time: in live mode the always-open browser does the sending
 (see live.py), otherwise each send opens the profile briefly and parallel workers queue on a lock.
 """
+import hashlib
 import json
 import random
 import sys
 import time
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 
 from . import ig
 
@@ -112,31 +114,152 @@ def session(cfg, fn, headless=True):
             ctx.close()
 
 
-def api(page, path):
-    """Call Instagram's API from inside the page, the way the web app does."""
-    res = page.evaluate(
-        """async ([path, appId]) => {
-            const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || "";
-            const r = await fetch(path, {credentials: "include", headers: {
-                "X-IG-App-ID": appId, "X-CSRFToken": csrf, "X-Requested-With": "XMLHttpRequest"}});
-            return {status: r.status, url: r.url, body: await r.text()};
-        }""", [path, ig.APP_ID])
-    if "checkpoint_required" in res["body"][:300] or any(k in res["url"] for k in CHECKPOINT_PATHS):
-        raise InboxError("INBOX ERROR: Instagram wants the account owner to answer a warning or check. "
-                         "Stop the bot and run: python botctl.py open")
-    if res["status"] != 200 or "/accounts/login" in res["url"]:
-        raise InboxError(f"INBOX ERROR: HTTP {res['status']} on {path} (logged out or blocked).")
-    return json.loads(res["body"])
+# ---------- reading the conversation ----------
+# Instagram retired the web endpoint /api/v1/direct_v2/inbox/ (it answers 404 since 7 Oct 2026). The page now
+# loads conversations through GraphQL, so the bot reads what the page itself receives when it opens the chat:
+# it makes no request of its own. The result is handed on in the shape the rest of the bot already used.
+
+def _item_id(mid, ts_ms):
+    """A shell-safe id for a message: the new ids look like "mid.$cAD8…", and a `$` on a command line is trouble."""
+    return f"{ts_ms}{int(hashlib.sha1(mid.encode()).hexdigest()[:8], 16) % 1000000:06d}"
+
+
+def _real_url(url):
+    """Links in messages go through l.instagram.com/?u=<the real address>."""
+    parts = urlsplit(url)
+    if parts.netloc == "l.instagram.com":
+        return (parse_qs(parts.query).get("u") or [url])[0]
+    return url
+
+
+def _thread_shape(t):
+    owner, viewer = t["users"][0], t.get("viewer") or {}
+    viewer_pk = str(t.get("viewer_id") or viewer.get("id") or "")
+    igid = {owner.get("interop_messaging_user_fbid"): str(owner.get("id")),
+            viewer.get("interop_messaging_user_fbid"): viewer_pk}
+    items = []
+    for edge in (t.get("slide_messages") or {}).get("edges", []):
+        n = edge["node"]
+        c = n.get("content") or {}
+        if c.get("__typename") == "SlideMessageAdminText":
+            continue  # "X reacted to your message" lines are not messages
+        ts = n["timestamp_ms"]
+        it = {"item_id": _item_id(n["id"], ts), "mid": n["id"], "timestamp": int(ts) * 1000,
+              "user_id": str((n.get("sender") or {}).get("igid") or igid.get(n.get("sender_fbid"), ""))}
+        text = n.get("text_body") or c.get("text_body") or c.get("xma_text_body") or ""
+        xma = c.get("xma")
+        if c.get("__typename") == "SlideMessageText":
+            it.update(item_type="text", text=text)
+        elif xma:
+            url = _real_url(xma.get("target_url") or "")
+            post = ig.INSTAGRAM_POST.match(url)
+            preview = (xma.get("preview_image") or {}).get("url")
+            if text:  # words with a link under them
+                it.update(item_type="link",
+                          link={"text": text, "link_context": {"link_url": post.group(0) + "/" if post else url}})
+            elif post:  # a shared reel or post
+                key = "xma_clip" if "/reel" in post.group(0) else "xma_media_share"
+                it["item_type"] = "clip" if key == "xma_clip" else "media_share"
+                it[key] = [{"target_url": post.group(0) + "/", "preview_url": preview,
+                            "user": {"username": xma.get("header_title_text")}}]
+            else:  # a story, a Threads post, a profile...
+                it.update(item_type="xma_share", xma_share={
+                    "target_url": url, "preview_url": preview, "title": xma.get("title_text"),
+                    "header_title_text": xma.get("header_title_text"), "caption": xma.get("caption_body_text"),
+                    "subtitle": xma.get("subtitle_text")})
+        else:
+            it.update(item_type=(n.get("content_type") or "unknown").lower(), content=c)
+        replied = n.get("replied_to_message")
+        if replied and replied.get("id"):
+            it["replied_to_message"] = {"item_id": _item_id(replied["id"], replied.get("timestamp_ms", "0"))}
+        it["reactions"] = {"emojis": [{"emoji": r.get("reaction"), "sender_id": igid.get(r.get("sender_fbid"), "")}
+                                      for r in n.get("reactions") or []]}
+        items.append(it)
+    seen = {}
+    for r in t.get("slide_read_receipts") or []:
+        if r.get("participant_fbid") == viewer.get("interop_messaging_user_fbid"):
+            upto = int(r.get("watermark_timestamp_ms") or 0) * 1000
+            newest = next((i for i in items if i["timestamp"] <= upto + 1000), None)
+            if newest:
+                seen[viewer_pk] = {"item_id": newest["item_id"]}
+    thread = {"thread_id": t["thread_key"], "owner_id": str(owner.get("id")), "items": items, "last_seen_at": seen,
+              "users": [{"pk": str(owner.get("id")), "username": owner.get("username"),
+                         "full_name": owner.get("full_name")}]}
+    return thread, {"pk": viewer_pk, "username": viewer.get("username")}
+
+
+def _is_owner(cfg, t):
+    users = (t or {}).get("users") or []
+    return len(users) == 1 and (users[0].get("username") or "").lower() == cfg.owner.lower()
+
+
+def read_thread(cfg, page):
+    """Open the owner's chat on `page` and return (thread, viewer) from what the page loads. The page is left
+    on the chat. (None, viewer) when there is no conversation with the owner yet."""
+    got = []
+
+    def on_response(resp):
+        post = resp.request.post_data or ""
+        kind = "detail" if "IGDThreadDetailQuery" in post else "inbox" if "PolarisDirectInboxQuery" in post else None
+        if kind:
+            try:
+                got.append((kind, json.loads(resp.text())))
+            except Exception:
+                pass
+
+    def wait_for(pick, seconds):
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            _challenged(page)
+            found = pick()
+            if found:
+                return found
+            page.wait_for_timeout(400)
+        return None
+
+    def details():
+        out = [(d.get("data", {}).get("get_slide_thread_nullable") or {}).get("as_ig_direct_thread")
+               for k, d in got if k == "detail"]
+        return [t for t in out if _is_owner(cfg, t)]
+
+    key_file = cfg.data_dir / "thread_key.txt"
+    page.on("response", on_response)
+    try:
+        for attempt in (1, 2):
+            key = key_file.read_text(encoding="utf-8").strip() if key_file.exists() else ""
+            if not key:  # find the owner's chat in the inbox list once, then remember its address
+                page.goto(HOME, wait_until="domcontentloaded")
+                inboxes = wait_for(lambda: [d for k, d in got if k == "inbox"], 20)
+                if not inboxes:
+                    raise InboxError("INBOX ERROR: the inbox did not load (Instagram changed the page, or it is blocked).")
+                viewer = {}
+                for d in inboxes:
+                    box = d.get("data", {}).get("get_slide_mailbox_for_iris_subscription") or {}
+                    for edge in (box.get("threads_by_folder") or {}).get("edges", []):
+                        t = (edge.get("node") or {}).get("as_ig_direct_thread") or {}
+                        viewer = {"pk": str(t.get("viewer_id") or ""), "username": None}
+                        if _is_owner(cfg, t):
+                            key = t["thread_key"]
+                if not key:
+                    return None, viewer
+                key_file.write_text(key, encoding="utf-8")
+            page.goto(f"https://www.instagram.com/direct/t/{key}/", wait_until="domcontentloaded")
+            if wait_for(details, 20):
+                page.wait_for_timeout(1200)  # the page may load the chat more than once; take the last
+                return _thread_shape(details()[-1])
+            key_file.unlink(missing_ok=True)  # a remembered address that no longer opens the chat
+        raise InboxError("INBOX ERROR: the conversation did not load (Instagram changed the page, or it is blocked).")
+    finally:
+        page.remove_listener("response", on_response)
 
 
 def page_thread(cfg, page):
-    data = api(page, "/api/v1/direct_v2/inbox/?persistentBadging=true&limit=20&thread_message_limit=30")
-    for t in data.get("inbox", {}).get("threads", []):
-        users = t.get("users", [])
-        if len(users) == 1 and users[0].get("username", "").lower() == cfg.owner.lower():
-            t["owner_id"] = str(users[0].get("pk"))
-            return t, data.get("viewer", {})
-    return None, data.get("viewer", {})
+    """(thread, viewer) without moving `page`: the chat is opened in a tab of its own, then closed."""
+    tab = page.context.new_page()
+    try:
+        return read_thread(cfg, tab)
+    finally:
+        tab.close()
 
 
 def dismiss_popups(page):
@@ -186,11 +309,10 @@ def quote_target(cfg, page, item):
 
 def send_on_page(cfg, page, text, reply_to=None):
     """Type one reply into the owner's thread on `page` and confirm it arrived. Returns a status line."""
-    t, _ = page_thread(cfg, page)
+    t, _ = read_thread(cfg, page)  # leaves the page on the chat
     if not t:
         raise InboxError(f"INBOX ERROR: no conversation with @{cfg.owner} yet. Send the bot a message first.")
-    page.goto(f"https://www.instagram.com/direct/t/{t['thread_id']}/", wait_until="domcontentloaded")
-    page.wait_for_timeout(random.randint(3000, 5000))
+    page.wait_for_timeout(random.randint(1500, 3000))
     dismiss_popups(page)
     box = page.locator('div[role="textbox"][contenteditable="true"]').first
     box.wait_for(timeout=30000)
@@ -203,11 +325,11 @@ def send_on_page(cfg, page, text, reply_to=None):
     page.keyboard.insert_text(text)
     page.wait_for_timeout(random.randint(700, 1500))
     page.keyboard.press("Enter")
-    for _ in range(10):  # confirm through the API that the message is now in the thread
-        page.wait_for_timeout(2000)
-        t2, viewer = page_thread(cfg, page)
+    for _ in range(4):  # confirm that the message is now in the chat, by loading the chat again
+        page.wait_for_timeout(3000)
+        t2, viewer = read_thread(cfg, page)
         if any(str(it.get("user_id")) == str(viewer.get("pk")) and ig.sent_text(it) == text
-               for it in t2.get("items", [])[:5]):
+               for it in (t2 or {}).get("items", [])[:6]):
             write_cookies(cfg, page.context)  # keep the plain-HTTP cookies fresh while here
             return "SENT" + ("" if not reply_to else " (as a reply)" if quoted else " (quote not found, sent plain)")
     raise InboxError("SEND ERROR: typed and pressed Enter, but the message did not show up in the thread.")
@@ -215,16 +337,15 @@ def send_on_page(cfg, page, text, reply_to=None):
 
 def seen_on_page(cfg, page):
     """Open the owner's chat so Instagram shows him "Seen": he knows the bot has his message."""
-    t, viewer = page_thread(cfg, page)
+    t, viewer = read_thread(cfg, page)  # opening the chat is what marks it seen
     if not t:
         return "no conversation yet"
-    page.goto(f"https://www.instagram.com/direct/t/{t['thread_id']}/", wait_until="domcontentloaded")
-    page.wait_for_timeout(random.randint(4000, 6000))
+    page.wait_for_timeout(random.randint(2500, 4000))
     dismiss_popups(page)
     page.bring_to_front()
     page.mouse.move(640, 430)  # a person's pointer over the conversation
     page.wait_for_timeout(2500)
-    t2, _ = page_thread(cfg, page)
+    t2, _ = read_thread(cfg, page)
     seen = (t2.get("last_seen_at") or {}).get(str(viewer.get("pk")), {}).get("item_id")
     latest = (t2.get("items") or [{}])[0].get("item_id")
     return "SEEN" if seen and seen == latest else "OPENED (Instagram has not marked it seen yet)"

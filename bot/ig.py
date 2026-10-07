@@ -1,22 +1,14 @@
-"""Reading the bot account's DM thread with the owner over plain HTTP, and the handled-message state.
+"""The owner's messages as the bot sees them, and the handled-message state.
 
-Reads use the cookies file that the browser profile writes (see browser.py). Sending never happens here:
-a scripted POST to Instagram's web API got a session logged out in testing, so replies are typed into
-the real page instead.
+The conversation itself is read by the browser (browser.read_thread), from what Instagram's own page loads:
+in live mode by the open browser, otherwise by opening the profile for the read.
 """
-import http.cookiejar
 import json
 import os
 import re
 import time
 import urllib.request
 from contextlib import contextmanager
-
-import requests
-
-APP_ID = "936619743392459"  # Instagram web app id, sent by instagram.com itself
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
 
 
 class LoggedOut(Exception):
@@ -42,40 +34,18 @@ def _via_live(cfg):
     return t or {}
 
 
-def _user_agent(cfg):
-    """The same user agent the bot's browser presents (cached by browser.py), so both look like one client."""
-    try:
-        return (cfg.user_dir / "user_agent.txt").read_text(encoding="utf-8").split("\n")[1] or UA
-    except (OSError, IndexError):
-        return UA
-
-
 def owner_thread(cfg, messages=50):
-    """The one-to-one thread with the owner (None if there is none yet). Raises LoggedOut if the cookies are refused."""
+    """The one-to-one thread with the owner (None if there is none yet). Raises LoggedOut when it cannot be read."""
     t = _via_live(cfg)
     if t is not None:
         return t or None
-    jar = http.cookiejar.MozillaCookieJar(str(cfg.cookies))
+    # Without live mode the profile is opened for the read. The plain-HTTP read this used to be relied on
+    # /api/v1/direct_v2/inbox/, which Instagram retired; the page's own data is the only source left.
+    from . import browser
     try:
-        jar.load(ignore_discard=True, ignore_expires=True)
-    except OSError:
-        raise LoggedOut("no cookies file yet")
-    csrf = next((c.value for c in jar if c.name == "csrftoken"), "")
-    r = requests.get(
-        "https://www.instagram.com/api/v1/direct_v2/inbox/",
-        params={"persistentBadging": "true", "limit": 20, "thread_message_limit": messages},
-        cookies=jar, allow_redirects=False, timeout=30,
-        headers={"User-Agent": _user_agent(cfg), "X-IG-App-ID": APP_ID, "X-CSRFToken": csrf,
-                 "X-Requested-With": "XMLHttpRequest", "Referer": "https://www.instagram.com/direct/inbox/"})
-    if r.status_code in (301, 302, 401, 403):
-        raise LoggedOut(f"HTTP {r.status_code}")
-    r.raise_for_status()
-    for t in r.json().get("inbox", {}).get("threads", []):
-        users = t.get("users", [])
-        if len(users) == 1 and users[0].get("username", "").lower() == cfg.owner.lower():
-            t["owner_id"] = str(users[0].get("pk"))
-            return t
-    return None
+        return browser.session(cfg, lambda page: browser.read_thread(cfg, page)[0])
+    except browser.InboxError as e:
+        raise LoggedOut(str(e))
 
 
 INSTAGRAM_POST = re.compile(r"https://(www\.)?instagram\.com/(p|reel|reels|tv)/[\w-]+")
