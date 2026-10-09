@@ -489,7 +489,7 @@ function render() {
 
   const al = $('alert');
   if (b.problem) {
-    const k = /logged/.test(b.problem) ? 'pLogin' : /warning or check/.test(b.problem) ? 'pCheck' : 'pFail';
+    const k = /logged/.test(b.problem) ? 'pLogin' : /warning or check|a notice/.test(b.problem) ? 'pCheck' : 'pFail';
     al.hidden = false;
     al.innerHTML = '<b>' + L[k] + '</b> ' + L[k + 'Do'] + '<code>' + esc(b.problem) + '</code>';
   } else al.hidden = true;

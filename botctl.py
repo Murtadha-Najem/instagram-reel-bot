@@ -79,7 +79,11 @@ def main(argv):
             text = rest[0]
         else:
             sys.exit(__doc__)
-        print(browser.send(cfg, text, reply_to))
+        try:
+            print(browser.send(cfg, text, reply_to))
+        except browser.InboxError as e:   # the agent sees it; the log and the dashboard should too
+            watch.log(cfg, f"send failed: {e}")
+            raise
     elif cmd == "chat" and len(args) == 4 and args[0] == "--brief" and args[2] == "--title":
         from bot import chat
         print(chat.open_chat(cfg, args[1], args[3]))

@@ -273,6 +273,17 @@ def dismiss_popups(page):
             pass
 
 
+def blocking_notice(page):
+    """The text of a dialog still covering the page after the routine pop-ups were dismissed, or None."""
+    try:
+        text = page.evaluate("""() => { const d = [...document.querySelectorAll('[role=dialog]')]
+            .find(e => { const r = e.getBoundingClientRect(); return r.width > 200 && r.height > 150; });
+            return d ? d.innerText : null; }""")
+    except Exception:
+        return None
+    return " / ".join(text.split("\n"))[:160] if text and text.strip() else None
+
+
 def quote_target(cfg, page, item):
     """Open Instagram's reply-to on the owner's message `item`. True if the quote box opened."""
     if item.get("item_type") == "text":
@@ -316,6 +327,10 @@ def send_on_page(cfg, page, text, reply_to=None):
     dismiss_popups(page)
     box = page.locator('div[role="textbox"][contenteditable="true"]').first
     box.wait_for(timeout=30000)
+    notice = blocking_notice(page)
+    if notice:  # a message from Instagram to the account's owner: his to read and close, not the bot's
+        raise InboxError("INBOX ERROR: Instagram is showing the account a notice that covers the chat "
+                         f"(\"{notice}\"). Stop the bot, run: python botctl.py open, read it and close it.")
     quoted = False
     if reply_to:
         item = next((it for it in t.get("items", []) if it["item_id"] == reply_to), None)

@@ -130,7 +130,7 @@ def last_problem(cfg):
     for line in reversed(log_tail(cfg, 400)):
         if "live: watching the inbox" in line or re.search(r"discover: \d+ skimmed", line):
             return None  # things worked after whatever came before
-        if re.search(r"logged (the bot )?out|answer a warning or check|discover: (stopped|error)", line):
+        if re.search(r"logged (the bot )?out|answer a warning or check|send failed|discover: (stopped|error)", line):
             return line
     return None
 
